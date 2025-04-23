@@ -1,7 +1,11 @@
-use actix_web::{HttpRequest, HttpResponse, Responder, get};
-
-#[get("/")]
-async fn landing(_: HttpRequest) -> impl Responder {
-    HttpResponse::Ok().body("Hello World ")
+pub async fn landing() -> String {
+    String::from("Hello World")
 }
 
+pub async fn update_player() {
+
+}
+
+pub async fn destroy_player() {
+
+}

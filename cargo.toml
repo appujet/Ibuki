@@ -5,7 +5,9 @@ edition = "2024"
 rust-version = "1.85.0"
 
 [dependencies]
-actix-web = "4.10.2"
+actix = "0.13.5"
+dashmap = "6.1.0"
+
 dotenv = "0.15.0"
 tracing = "0.1.41"
 
@@ -26,3 +28,8 @@ features = ["tracing", "macros", "signal", "rt-multi-thread"]
 default-features = false
 features = ["driver", "simd-json", "rustls"]
 version = "0.4.6"
+
+[dependencies.axum]
+default-features = true
+features = ["ws"]
+version = "0.8.3"
