@@ -1,6 +1,7 @@
-use songbird::{CoreEvent, Event, EventContext, EventHandler, TrackEvent};
-use songbird::id::GuildId;
 use crate::manager::PlayerManager;
+use async_trait::async_trait;
+use songbird::id::GuildId;
+use songbird::{CoreEvent, Event, EventContext, EventHandler, TrackEvent};
 
 pub struct ManagerEvent {
     pub manager: PlayerManager,
@@ -8,11 +9,20 @@ pub struct ManagerEvent {
     pub event_type: Event,
 }
 
+#[async_trait]
 impl EventHandler for ManagerEvent {
     async fn act(&self, ctx: &EventContext<'_>) -> Option<Event> {
+        let manager = self.manager.clone();
+        let guild_id = self.guild_id;
+        let event_type = self.event_type;
+
+        let _state = match ctx {
+            EventContext::Track([(state, _)]) => Some((*state).clone()),
+            _ => None,
+        };
 
         tokio::spawn(async move {
-            match self.event_type {
+            match event_type {
                 Event::Periodic(_, _) => {
                     // todo: player update to ws
                 }
@@ -20,16 +30,9 @@ impl EventHandler for ManagerEvent {
                     // todo: track stuck to ws
                 }
                 Event::Track(event) => {
-                    let _state = {
-                        let EventContext::Track([(state, _)]) = ctx else {
-                            None
-                        };
-                        Some(state)
-                    };
-
                     match event {
                         TrackEvent::End => {
-                            self.manager.delete_handle(self.guild_id);
+                            manager.delete_handle(guild_id);
                             // todo: track end and send to ws
                         }
                         TrackEvent::Playable => {
@@ -41,15 +44,12 @@ impl EventHandler for ManagerEvent {
                         _ => {}
                     }
                 }
-                Event::Core(event) => {
-                    if let CoreEvent::ClientDisconnect = event {
-                        self.manager.delete_handle(self.guild_id);
-                        // todo: driver disconnect and send to ws
-                    }
+                Event::Core(CoreEvent::ClientDisconnect) => {
+                    manager.delete_handle(guild_id);
+                    // todo: driver disconnect and send to ws
                 }
-                _ => {},
+                _ => {}
             }
-
         });
 
         None

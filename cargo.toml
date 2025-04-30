@@ -5,11 +5,12 @@ edition = "2024"
 rust-version = "1.85.0"
 
 [dependencies]
-actix = "0.13.5"
+flume = "0.11.1"
 dashmap = "6.1.0"
-
 dotenv = "0.15.0"
 tracing = "0.1.41"
+futures = "0.3.31"
+async-trait = "0.1.88"
 
 [dependencies.uuid]
 version = "1.16.0"

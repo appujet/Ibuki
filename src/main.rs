@@ -1,29 +1,46 @@
-use std::cell::LazyCell;
-use actix::Actor;
-use axum::{serve, routing, Router};
+use crate::websocket::client::WebsocketClient;
+use axum::{Router, routing, serve};
 use dashmap::DashMap;
-use tokio::{net, main };
 use dotenv::dotenv;
-use songbird::model::id::GuildId;
-use crate::manager::PlayerManager;
+use std::net::SocketAddr;
+use std::sync::LazyLock;
+use tokio::{main, net};
 
+mod events;
+mod manager;
 mod routes;
 mod websocket;
-mod manager;
-mod events;
 
-// todo: should be websocket client and session id here
-pub static PLAYERS: LazyCell<DashMap<GuildId, PlayerManager>> = LazyCell::new(|| DashMap::new());
+pub static CLIENTS: LazyLock<DashMap<u128, WebsocketClient>> = LazyLock::new(DashMap::new);
 
 #[main(flavor = "multi_thread")]
 async fn main() {
     dotenv().ok();
 
+    LazyLock::force(&CLIENTS);
+
     let app = Router::new()
-        .route("/", routing::get(routes::landing))
-        .route("/sessions/session_id/players/guild_id", routing::get(routes::update_player));
+        .route("/", routing::get(routes::global::landing))
+        .route("/lavalink/v4/websocket", routing::any(routes::global::ws))
+        .route(
+            "/lavalink/v4/sessions/{session_id}/players/{guild_id}",
+            routing::get(routes::lavalink::get_player),
+        )
+        .route(
+            "/lavalink/v4/sessions/{session_id}/players/{guild_id}",
+            routing::patch(routes::lavalink::update_player),
+        )
+        .route(
+            "/lavalink/v4/sessions/{session_id}/players/{guild_id}",
+            routing::delete(routes::lavalink::destroy_player),
+        );
 
     let listener = net::TcpListener::bind("0.0.0.0:8080").await.unwrap();
 
-    serve(listener, app).await.unwrap();
+    serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .await
+    .unwrap();
 }
