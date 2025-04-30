@@ -18,21 +18,6 @@ pub async fn ws(
     headers: HeaderMap,
     connection: ConnectInfo<SocketAddr>,
 ) -> Response<Body> {
-    let Some(authorization) = headers
-        .get("Authorization")
-        .map(|data| data.to_str().unwrap())
-    else {
-        return Response::builder()
-            .status(StatusCode::BAD_REQUEST)
-            .body(Body::from("Missing Authorization in headers"))
-            .unwrap();
-    };
-
-    // todo: do auth checks here and change placeholder
-    if authorization != "placeholder" {
-        // todo: return status code unathorized
-    }
-
     let Some(user_agent) = headers.get("User-Agent").map(|data| data.to_str().unwrap()) else {
         return Response::builder()
             .status(StatusCode::BAD_REQUEST)
