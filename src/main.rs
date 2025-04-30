@@ -1,16 +1,19 @@
 use std::cell::LazyCell;
 use actix::Actor;
-use axum::{serve, routing, Router };
-use tokio::{ net, main };
+use axum::{serve, routing, Router};
+use dashmap::DashMap;
+use tokio::{net, main };
 use dotenv::dotenv;
-use crate::ibuki::Ibuki;
+use songbird::model::id::GuildId;
+use crate::manager::PlayerManager;
 
 mod routes;
 mod websocket;
-mod ibuki;
+mod manager;
 mod events;
 
-pub static IBUKI: LazyCell<Ibuki> = LazyCell::new(|| Ibuki::new());
+// todo: should be websocket client and session id here
+pub static PLAYERS: LazyCell<DashMap<GuildId, PlayerManager>> = LazyCell::new(|| DashMap::new());
 
 #[main(flavor = "multi_thread")]
 async fn main() {
