@@ -1,14 +1,18 @@
 use crate::CLIENTS;
 use crate::manager::PlayerManager;
+use axum::Error;
 use axum::extract::ConnectInfo;
 use axum::extract::ws::{CloseFrame, Message, Utf8Bytes, WebSocket};
+use dashmap::mapref::one::RefMut;
 use flume::{Receiver, Sender, unbounded};
-use futures::{sink::SinkExt, stream::StreamExt};
+use futures::{sink::SinkExt, stream::StreamExt, stream::iter};
 use songbird::id::UserId;
 use std::net::SocketAddr;
 use std::ops::ControlFlow;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::task::JoinHandle;
+use tokio::time::sleep;
 use uuid::Uuid;
 
 #[derive(Clone)]
@@ -40,7 +44,12 @@ impl WebsocketClient {
         }
     }
 
-    pub async fn connect(&mut self, socket: WebSocket) -> Result<(), axum::Error> {
+    pub async fn connect(
+        &mut self,
+        socket: WebSocket,
+        session_id: u128,
+        resume: bool,
+    ) -> Result<(), axum::Error> {
         for handle in &self.handles {
             handle.abort();
         }
@@ -49,16 +58,54 @@ impl WebsocketClient {
 
         let (mut sender, mut receiver) = socket.split();
 
-        for message in self.message_receiver.drain() {
-            sender.send(message).await?;
+        if !resume {
+            let _ = self.message_receiver.drain().collect::<Vec<Message>>();
+        } else {
+            let mut messages = iter(self.message_receiver.drain().map(Ok::<Message, Error>));
+            sender.send_all(&mut messages).await?;
         }
 
+        let manager = self.player_manager.clone();
+
         let handle = tokio::spawn(async move {
-            while let Some(_message) = receiver.next().await {
-                // todo: handle websocket message
+            let mut closed = false;
+
+            while let Some(Ok(message)) = receiver.next().await {
+                if let Message::Close(close_frame) = message {
+                    tracing::info!(
+                        "Websocket connection was closed with closing frame: {:?}",
+                        close_frame
+                    );
+
+                    closed = true;
+                    break;
+                }
             }
 
-            // todo: on disconnect
+            if closed {
+                // todo: not hard coded and configurable
+                let duration = Duration::from_secs(60);
+
+                tracing::info!(
+                    "Websocket connection was closed abruptly and is possible to be resumed within {} sec(s)",
+                    duration.as_secs()
+                );
+
+                sleep(duration).await;
+            }
+
+            let connections = manager.get_connection_len();
+            let players = manager.get_player_len();
+
+            manager.destroy();
+
+            clean_up_client(session_id);
+
+            tracing::info!(
+                "Cleaned up {} connection(s) and {} player(s)",
+                connections,
+                players
+            );
         });
 
         self.handles.push(handle);
@@ -114,39 +161,52 @@ pub async fn handle_websocket_upgrade_request(
 ) {
     let session_id = data.session_id.unwrap_or(Uuid::new_v4().to_u128_le());
 
-    let flow = {
-        let mut client = CLIENTS.get_mut(&session_id).unwrap_or_else(|| {
-            let client = WebsocketClient::new(data.user_id);
-            CLIENTS.insert(session_id, client);
-            CLIENTS.get_mut(&session_id).unwrap()
-        });
+    let (mut client, resume): (RefMut<'_, u128, WebsocketClient>, bool) = {
+        // resumed
+        if let Some(client) = CLIENTS.get_mut(&session_id) {
+            (client, true)
+        // existing connection and not resumed
+        } else if let Some(key) = CLIENTS.iter().find_map(|client| {
+            if client.user_id != data.user_id {
+                return None;
+            }
+            Some(*client.key())
+        }) {
+            let (_, client) = CLIENTS.remove(&key).unwrap();
+            client.player_manager.destroy();
 
-        if let Err(error) = client.connect(socket).await {
-            tracing::warn!(
-                "Socket failed to connect from: {}. [SessionId: {}] [UserId: {}] [UserAgent: {}] [Error: {:?}]",
-                addr.ip(),
-                session_id,
-                data.user_id,
-                data.user_agent,
-                error
-            );
-            ControlFlow::Break(())
+            CLIENTS.insert(session_id, client);
+
+            (CLIENTS.get_mut(&session_id).unwrap(), false)
+        // new connection
         } else {
-            ControlFlow::Continue(())
+            let client = WebsocketClient::new(data.user_id);
+
+            CLIENTS.insert(session_id, client);
+
+            (CLIENTS.get_mut(&session_id).unwrap(), false)
         }
     };
 
-    if flow == ControlFlow::Break(()) {
-        CLIENTS.remove(&session_id);
+    if let Err(error) = client.connect(socket, session_id, resume).await {
+        tracing::warn!(
+            "Socket failed to connect from: {}. [SessionId: {}] [UserId: {}] [UserAgent: {}] [Error: {:?}]",
+            addr.ip(),
+            session_id,
+            data.user_id,
+            data.user_agent,
+            error
+        );
         return;
     }
 
     tracing::info!(
-        "New Connection from: {}. [SessionId: {}] [UserId: {}] [UserAgent: {}]",
+        "New Connection from: {}. [SessionId: {}] [UserId: {}] [UserAgent: {}] [Resume: {}]",
         addr.ip(),
         session_id,
         data.user_id,
         data.user_agent,
+        resume
     );
 }
 
@@ -168,4 +228,8 @@ pub fn handle_websocket_upgrade_error(
         data.user_agent,
         error
     );
+}
+
+fn clean_up_client(session_id: u128) {
+    CLIENTS.remove(&session_id);
 }

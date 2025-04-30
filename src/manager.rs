@@ -22,6 +22,14 @@ impl PlayerManager {
         }
     }
 
+    pub fn get_connection_len(&self) -> usize {
+        self.connections.len()
+    }
+
+    pub fn get_player_len(&self) -> usize {
+        self.handles.len()
+    }
+
     pub fn get_connection(&self, guild_id: GuildId) -> Option<Driver> {
         self.connections.get(&guild_id).map(|data| data.clone())
     }
