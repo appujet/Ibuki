@@ -16,16 +16,20 @@ use tokio::{
     task::JoinSet,
     time::{Duration, interval},
 };
+use tower::ServiceBuilder;
 use tracing::Level;
 use tracing_subscriber::fmt;
 
 mod auth;
+mod constants;
 mod models;
 mod routes;
+mod version;
 mod voice;
 mod ws;
 
-pub static CLIENTS: LazyLock<DashMap<UserId, WebsocketClient>> = LazyLock::new(DashMap::new);
+#[allow(non_upper_case_globals)]
+pub static Clients: LazyLock<DashMap<UserId, WebsocketClient>> = LazyLock::new(DashMap::new);
 
 #[main(flavor = "multi_thread")]
 async fn main() {
@@ -43,7 +47,7 @@ async fn main() {
 
     tracing::subscriber::set_global_default(subscriber).expect("Failed to set global logger");
 
-    LazyLock::force(&CLIENTS);
+    LazyLock::force(&Clients);
 
     tokio::spawn(async move {
         let mut interval = interval(Duration::from_secs(30));
@@ -72,7 +76,7 @@ async fn main() {
 
             let serialized = serde_json::to_string(&LavalinkMessage::Stats(stats.clone())).unwrap();
 
-            let set = CLIENTS
+            let set = Clients
                 .iter()
                 .map(|client| {
                     let clone = serialized.clone();
@@ -87,20 +91,24 @@ async fn main() {
     });
 
     let app = Router::new()
-        .route("/lavalink/v4/websocket", routing::any(routes::global::ws))
+        .route("/v{version}/websocket", routing::any(routes::global::ws))
         .route(
-            "/lavalink/v4/sessions/{session_id}/players/{guild_id}",
+            "/v{version}/sessions/{session_id}/players/{guild_id}",
             routing::get(routes::lavalink::get_player),
         )
         .route(
-            "/lavalink/v4/sessions/{session_id}/players/{guild_id}",
+            "/v{version}/sessions/{session_id}/players/{guild_id}",
             routing::patch(routes::lavalink::update_player),
         )
         .route(
-            "/lavalink/v4/sessions/{session_id}/players/{guild_id}",
+            "/v{version}/sessions/{session_id}/players/{guild_id}",
             routing::delete(routes::lavalink::destroy_player),
         )
-        .route_layer(from_fn(auth::authenticate))
+        .route_layer(
+            ServiceBuilder::new()
+                .layer(from_fn(version::check))
+                .layer(from_fn(auth::authenticate)),
+        )
         .route("/", routing::get(routes::global::landing));
 
     let listener = net::TcpListener::bind("0.0.0.0:8080").await.unwrap();

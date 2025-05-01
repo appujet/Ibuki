@@ -1,4 +1,4 @@
-use crate::CLIENTS;
+use crate::Clients;
 use crate::models::lavalink::{
     Exception, LavalinkMessage, LavalinkPlayerState, PlayerEvents, PlayerUpdate, Track, TrackEnd,
     TrackException, TrackInfo, TrackStart, TrackStuck, WebSocketClosed,
@@ -28,7 +28,7 @@ impl EventHandler for ManagerEvent {
         };
 
         tokio::spawn(async move {
-            let Some(client) = CLIENTS.get(&manager.user_id) else {
+            let Some(client) = Clients.get(&manager.user_id) else {
                 tracing::warn!(
                     "No websocket client found for [UserId: {}]. Probably a broken client?",
                     manager.user_id

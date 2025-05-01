@@ -1,4 +1,4 @@
-use crate::CLIENTS;
+use crate::Clients;
 use crate::models::lavalink::{LavalinkMessage, Ready};
 use crate::voice::manager::PlayerManager;
 use axum::Error;
@@ -136,7 +136,7 @@ impl WebsocketClient {
 
             manager.destroy();
 
-            CLIENTS.remove(&user_id);
+            Clients.remove(&user_id);
 
             tracing::info!(
                 "Cleaned up {} connection(s) and {} player(s)",
@@ -226,12 +226,12 @@ pub async fn handle_websocket_upgrade_request(
     data: WebsocketRequestData,
     addr: ConnectInfo<SocketAddr>,
 ) {
-    let mut client = CLIENTS.get_mut(&data.user_id).unwrap_or_else(|| {
+    let mut client = Clients.get_mut(&data.user_id).unwrap_or_else(|| {
         let client = WebsocketClient::new(data.user_id);
 
-        CLIENTS.insert(data.user_id, client);
+        Clients.insert(data.user_id, client);
 
-        CLIENTS.get_mut(&data.user_id).unwrap()
+        Clients.get_mut(&data.user_id).unwrap()
     });
 
     match client.connect(socket, data.session_id).await {

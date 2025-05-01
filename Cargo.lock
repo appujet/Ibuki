@@ -1080,6 +1080,7 @@ dependencies = [
  "songbird",
  "symphonia",
  "tokio",
+ "tower",
  "tracing",
  "tracing-subscriber",
  "uuid",
