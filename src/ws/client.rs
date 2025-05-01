@@ -66,18 +66,32 @@ impl WebsocketClient {
 
         let mut resumed = false;
 
+        let queue_length = self.message_receiver.len();
+
         if session_id.filter(|id| *id == self.session_id).is_some() {
             let mut messages = iter(self.message_receiver.drain().map(Ok::<Message, Error>));
 
             sender.send_all(&mut messages).await?;
 
             resumed = true;
+
+            tracing::info!(
+                "Websocket Connection with [SessionId: {}] resumed! [Replayed Messages: {}]",
+                self.session_id,
+                queue_length
+            );
         } else {
-            let _ = self.message_receiver.drain().collect::<Vec<Message>>();
+            let _ = self.message_receiver.drain();
 
             self.player_manager.destroy();
 
             self.session_id = Uuid::new_v4().as_u128();
+
+            tracing::info!(
+                "Websocket Connection with [SessionId: {}] re-identified! [Dropped Messages: {}]",
+                self.session_id,
+                queue_length
+            );
         }
 
         let ptr = Arc::new(AtomicBool::new(false));
@@ -108,7 +122,7 @@ impl WebsocketClient {
             drop(receiver);
 
             // todo: not hard coded and configurable
-            let duration = Duration::from_secs(15);
+            let duration = Duration::from_secs(60);
 
             tracing::info!(
                 "Websocket connection was closed abruptly and is possible to be resumed within {} sec(s)",
@@ -223,7 +237,7 @@ pub async fn handle_websocket_upgrade_request(
     match client.connect(socket, data.session_id).await {
         Ok(resumed) => {
             tracing::info!(
-                "New Connection from: {}. [SessionId: {}] [UserId: {}] [UserAgent: {}] [Resume: {}]",
+                "Handled connection from: {}. [SessionId: {}] [UserId: {}] [UserAgent: {}] [Resume: {}]",
                 addr.ip(),
                 client.session_id,
                 data.user_id,
@@ -232,8 +246,9 @@ pub async fn handle_websocket_upgrade_request(
             );
         }
         Err(error) => {
+            // todo: probably remove the client here?
             tracing::warn!(
-                "Socket failed to connect from: {}. [SessionId: {}] [UserId: {}] [UserAgent: {}] [Error: {:?}]",
+                "Connection was not handled properly from: {}. [SessionId: {}] [UserId: {}] [UserAgent: {}] [Error: {:?}]",
                 addr.ip(),
                 client.session_id,
                 data.user_id,
