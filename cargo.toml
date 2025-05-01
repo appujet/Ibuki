@@ -29,8 +29,12 @@ features = ["tracing", "macros", "signal", "rt-multi-thread"]
 
 [dependencies.songbird]
 default-features = false
-features = ["driver", "simd-json", "rustls"]
-version = "0.4.6"
+features = ["driver", "tungstenite", "rustls"]
+version = "0.5.0"
+
+[dependencies.symphonia]
+version = "0.5.4"
+features = ["all"]
 
 [dependencies.axum]
 default-features = true

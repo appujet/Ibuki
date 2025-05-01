@@ -134,12 +134,12 @@ impl PlayerManager {
     }
 
     pub fn destroy(&self) {
-        for mut connection in self.connections.iter_mut() {
+        self.connections.retain(|_, connection| {
             connection.leave();
             connection.remove_all_global_events();
-        }
+            false
+        });
 
-        self.connections.clear();
         self.handles.clear();
     }
 }

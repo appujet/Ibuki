@@ -54,11 +54,10 @@ impl WebsocketClient {
         socket: WebSocket,
         session_id: Option<u128>,
     ) -> Result<bool, Error> {
-        for handle in self.handles.iter() {
+        self.handles.retain(|handle| {
             handle.abort();
-        }
-
-        self.handles.clear();
+            false
+        });
 
         let (mut sender, mut receiver) = socket.split();
 
@@ -178,11 +177,10 @@ impl WebsocketClient {
             return;
         }
 
-        for handle in &self.handles {
+        self.handles.retain(|handle| {
             handle.abort();
-        }
-
-        self.handles.clear();
+            false
+        });
     }
 
     pub async fn send(&self, message: Message) -> ControlFlow<()> {
@@ -200,11 +198,10 @@ impl WebsocketClient {
      * Disconnects without close code and clears the voice connections
      */
     pub fn destroy(&mut self) {
-        for handle in self.handles.iter() {
+        self.handles.retain(|handle| {
             handle.abort();
-        }
-
-        self.handles.clear();
+            false
+        });
 
         self.player_manager.destroy();
     }

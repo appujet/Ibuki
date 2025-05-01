@@ -13,6 +13,7 @@ use std::net::SocketAddr;
 use std::sync::LazyLock;
 use tokio::{
     main, net,
+    task::JoinSet,
     time::{Duration, interval},
 };
 use tracing::Level;
@@ -50,32 +51,38 @@ async fn main() {
         loop {
             interval.tick().await;
 
-            for client in CLIENTS.iter_mut() {
-                // todo: fix stats placeholder
-                let stats = Stats {
-                    players: 0,
-                    playing_players: 0,
-                    uptime: 0,
-                    memory: Memory {
-                        free: 0,
-                        used: 0,
-                        allocated: 0,
-                        reservable: 0,
-                    },
-                    cpu: Cpu {
-                        cores: 0,
-                        system_load: 0.0,
-                        lavalink_load: 0.0,
-                    },
-                    frame_stats: None,
-                };
+            // todo: fix stats placeholder
+            let stats = Stats {
+                players: 0,
+                playing_players: 0,
+                uptime: 0,
+                memory: Memory {
+                    free: 0,
+                    used: 0,
+                    allocated: 0,
+                    reservable: 0,
+                },
+                cpu: Cpu {
+                    cores: 0,
+                    system_load: 0.0,
+                    lavalink_load: 0.0,
+                },
+                frame_stats: None,
+            };
 
-                let serialized = serde_json::to_string(&LavalinkMessage::Stats(stats)).unwrap();
+            let serialized = serde_json::to_string(&LavalinkMessage::Stats(stats.clone())).unwrap();
 
-                client
-                    .send(Message::Text(Utf8Bytes::from(serialized)))
-                    .await;
-            }
+            let set = CLIENTS
+                .iter()
+                .map(|client| {
+                    let clone = serialized.clone();
+                    async move {
+                        client.send(Message::Text(Utf8Bytes::from(clone))).await;
+                    }
+                })
+                .collect::<JoinSet<()>>();
+
+            set.join_all().await;
         }
     });
 
