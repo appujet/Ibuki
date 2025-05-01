@@ -1,6 +1,6 @@
 use crate::events::ManagerEvent;
 use dashmap::DashMap;
-use songbird::id::GuildId;
+use songbird::id::{GuildId, UserId};
 use songbird::input::Input;
 use songbird::tracks::TrackHandle;
 use songbird::{Config, ConnectionInfo, CoreEvent, Driver, Event, TrackEvent};
@@ -10,13 +10,15 @@ use tokio::time::sleep;
 
 #[derive(Clone)]
 pub struct PlayerManager {
+    pub user_id: UserId,
     connections: Arc<DashMap<GuildId, Driver>>,
     handles: Arc<DashMap<GuildId, TrackHandle>>,
 }
 
 impl PlayerManager {
-    pub fn new() -> Self {
+    pub fn new(user_id: UserId) -> Self {
         Self {
+            user_id,
             connections: Arc::new(DashMap::new()),
             handles: Arc::new(DashMap::new()),
         }
@@ -134,18 +136,10 @@ impl PlayerManager {
     pub fn destroy(&self) {
         for mut connection in self.connections.iter_mut() {
             connection.leave();
+            connection.remove_all_global_events();
         }
 
         self.connections.clear();
         self.handles.clear();
-    }
-}
-
-impl Default for PlayerManager {
-    fn default() -> Self {
-        Self {
-            connections: Arc::new(DashMap::new()),
-            handles: Arc::new(DashMap::new()),
-        }
     }
 }

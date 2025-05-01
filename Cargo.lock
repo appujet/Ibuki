@@ -1079,9 +1079,12 @@ dependencies = [
  "flume",
  "futures",
  "reqwest",
+ "serde",
+ "serde_json",
  "songbird",
  "tokio",
  "tracing",
+ "tracing-subscriber",
  "uuid",
 ]
 
