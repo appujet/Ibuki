@@ -1,6 +1,6 @@
 use crate::CLIENTS;
-use crate::manager::PlayerManager;
 use crate::models::lavalink::{LavalinkMessage, Ready};
+use crate::voice::manager::PlayerManager;
 use axum::Error;
 use axum::body::Bytes;
 use axum::extract::ConnectInfo;

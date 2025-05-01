@@ -1,4 +1,4 @@
-use crate::events::ManagerEvent;
+use super::events::ManagerEvent;
 use dashmap::DashMap;
 use songbird::id::{GuildId, UserId};
 use songbird::input::Input;

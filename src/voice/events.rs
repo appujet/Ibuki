@@ -1,9 +1,9 @@
 use crate::CLIENTS;
-use crate::manager::PlayerManager;
 use crate::models::lavalink::{
     Exception, LavalinkMessage, LavalinkPlayerState, PlayerEvents, PlayerUpdate, Track, TrackEnd,
     TrackException, TrackInfo, TrackStart, TrackStuck, WebSocketClosed,
 };
+use crate::voice::manager::PlayerManager;
 use async_trait::async_trait;
 use axum::extract::ws::{Message, Utf8Bytes};
 use songbird::id::GuildId;

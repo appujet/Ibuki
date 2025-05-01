@@ -1,4 +1,4 @@
-use crate::websocket::client::WebsocketClient;
+use crate::ws::client::WebsocketClient;
 use axum::{
     Router,
     extract::ws::{Message, Utf8Bytes},
@@ -19,11 +19,10 @@ use tracing::Level;
 use tracing_subscriber::fmt;
 
 mod auth;
-mod events;
-mod manager;
 mod models;
 mod routes;
-mod websocket;
+mod voice;
+mod ws;
 
 pub static CLIENTS: LazyLock<DashMap<UserId, WebsocketClient>> = LazyLock::new(DashMap::new);
 

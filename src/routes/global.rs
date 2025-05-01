@@ -1,4 +1,4 @@
-use crate::websocket::client::{
+use crate::ws::client::{
     WebsocketRequestData, handle_websocket_upgrade_error, handle_websocket_upgrade_request,
 };
 use axum::body::Body;
