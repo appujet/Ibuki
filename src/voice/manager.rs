@@ -1,11 +1,11 @@
+use crate::util::errors::PlayerManagerError;
+
 use super::events::ManagerEvent;
 use dashmap::DashMap;
 use songbird::id::{GuildId, UserId};
 use songbird::tracks::{Track, TrackHandle};
 use songbird::{Config, ConnectionInfo, CoreEvent, Driver, Event, TrackEvent};
 use std::sync::Arc;
-use std::time::Duration;
-use tokio::time::sleep;
 
 #[derive(Clone)]
 pub struct PlayerManager {
@@ -35,30 +35,35 @@ impl PlayerManager {
         self.connections.get(&guild_id).map(|data| data.clone())
     }
 
-    pub fn create_connection(
+    pub async fn create_connection(
         &self,
         guild_id: GuildId,
         connection: ConnectionInfo,
         config: Option<Config>,
-    ) {
-        if self.connections.contains_key(&guild_id) {
-            return;
-        }
+    ) -> Result<Driver, PlayerManagerError> {
+        let Some(driver) = self.connections.get(&guild_id) else {
+            let config_or_default = config.unwrap_or_default();
 
-        let mut driver = Driver::new(config.unwrap_or_default());
+            let mut driver = Driver::new(config_or_default.clone());
 
-        driver.add_global_event(
-            Event::Core(CoreEvent::DriverDisconnect),
-            ManagerEvent {
-                manager: self.clone(),
-                guild_id,
-                event_type: Event::Core(CoreEvent::DriverDisconnect),
-            },
-        );
+            driver.add_global_event(
+                Event::Core(CoreEvent::DriverDisconnect),
+                ManagerEvent {
+                    manager: self.clone(),
+                    guild_id,
+                    event_type: Event::Core(CoreEvent::DriverDisconnect),
+                },
+            );
 
-        driver.connect(connection);
+            driver.connect(connection.clone()).await?;
 
-        self.connections.insert(guild_id, driver);
+            self.connections.insert(guild_id, driver);
+
+            return Box::pin(self.create_connection(guild_id, connection, Some(config_or_default)))
+                .await;
+        };
+
+        Ok(driver.clone())
     }
 
     pub fn delete_connection(&self, guild_id: GuildId) {
@@ -77,55 +82,51 @@ impl PlayerManager {
         self.handles.get(&guild_id).map(|data| data.clone())
     }
 
-    pub async fn create_handle(&self, guild_id: GuildId, track: Track) {
+    pub async fn create_handle(
+        &self,
+        guild_id: GuildId,
+        track: Track,
+    ) -> Result<TrackHandle, PlayerManagerError> {
         let Some(mut driver) = self.connections.get_mut(&guild_id) else {
-            return;
+            return Err(PlayerManagerError::MissingConnection);
         };
 
         if let Some(handle) = self.handles.get(&guild_id) {
-            handle.stop().ok();
+            handle.stop()?;
         };
-
-        while self.handles.contains_key(&guild_id) {
-            sleep(Duration::from_millis(1)).await;
-        }
 
         let handle = driver.play_only(track);
 
-        handle
-            .add_event(
-                Event::Track(TrackEvent::Playable),
-                ManagerEvent {
-                    manager: self.clone(),
-                    guild_id,
-                    event_type: Event::Track(TrackEvent::Playable),
-                },
-            )
-            .ok();
+        handle.add_event(
+            Event::Track(TrackEvent::Playable),
+            ManagerEvent {
+                manager: self.clone(),
+                guild_id,
+                event_type: Event::Track(TrackEvent::Playable),
+            },
+        )?;
 
-        handle
-            .add_event(
-                Event::Track(TrackEvent::End),
-                ManagerEvent {
-                    manager: self.clone(),
-                    guild_id,
-                    event_type: Event::Track(TrackEvent::End),
-                },
-            )
-            .ok();
+        handle.add_event(
+            Event::Track(TrackEvent::End),
+            ManagerEvent {
+                manager: self.clone(),
+                guild_id,
+                event_type: Event::Track(TrackEvent::End),
+            },
+        )?;
 
-        handle
-            .add_event(
-                Event::Track(TrackEvent::Error),
-                ManagerEvent {
-                    manager: self.clone(),
-                    guild_id,
-                    event_type: Event::Track(TrackEvent::Error),
-                },
-            )
-            .ok();
+        handle.add_event(
+            Event::Track(TrackEvent::Error),
+            ManagerEvent {
+                manager: self.clone(),
+                guild_id,
+                event_type: Event::Track(TrackEvent::Error),
+            },
+        )?;
 
-        self.handles.insert(guild_id, handle);
+        self.handles.insert(guild_id, handle.clone());
+
+        Ok(handle)
     }
 
     pub fn delete_handle(&self, guild_id: GuildId) {

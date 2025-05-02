@@ -21,12 +21,12 @@ use tracing::Level;
 use tracing_subscriber::fmt;
 
 mod constants;
+mod middlewares;
 mod models;
 mod routes;
 mod util;
 mod voice;
 mod ws;
-mod middlewares;
 
 #[allow(non_upper_case_globals)]
 pub static Clients: LazyLock<DashMap<UserId, WebsocketClient>> = LazyLock::new(DashMap::new);
@@ -118,6 +118,8 @@ async fn main() {
         .route("/", routing::get(routes::global::landing));
 
     let listener = net::TcpListener::bind("0.0.0.0:8080").await.unwrap();
+
+    tracing::info!("Server is bound to {}", listener.local_addr().unwrap());
 
     serve(
         listener,

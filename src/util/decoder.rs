@@ -4,11 +4,11 @@
 // Thanks to @Takase (https://github.com/takase1121) for helping me with this
 //
 
+use crate::util::errors::Base64DecodeError;
 use base64::{Engine, prelude::BASE64_STANDARD};
 use byteorder::{BigEndian, ReadBytesExt};
 use serde::Serialize;
 use std::io::{Cursor, Read};
-use crate::util::errors::Base64DecodeError;
 
 #[derive(Serialize, Debug)]
 pub struct TrackInfo {
@@ -27,8 +27,8 @@ pub struct TrackInfo {
 }
 
 static TRACK_INFO_VERSIONED: u32 = 1;
-static TRACK_INFO_VERSION: u32 = 2;
-static PARAMETERS_SEPARATOR: &str = "|";
+static _TRACK_INFO_VERSION: u32 = 2;
+static _PARAMETERS_SEPARATOR: &str = "|";
 
 fn read_string(rdr: &mut Cursor<Vec<u8>>) -> Result<String, Base64DecodeError> {
     let len = rdr.read_u16::<BigEndian>()?;
@@ -129,7 +129,7 @@ pub fn decode_base64(encoded: &String) -> Result<TrackInfo, Base64DecodeError> {
     let mut rdr = Cursor::new(decoded);
     let value = rdr.read_u32::<BigEndian>()?;
     let flags = (value & 0xC0000000) >> 30;
-    let message_size = value & 0x3FFFFFFF;
+    let _message_size = value & 0x3FFFFFFF;
     let version = if flags & TRACK_INFO_VERSIONED != 0 {
         rdr.read_u8()?
     } else {
@@ -143,5 +143,3 @@ pub fn decode_base64(encoded: &String) -> Result<TrackInfo, Base64DecodeError> {
         _ => Err(Base64DecodeError::UnknownVersion(version)),
     }
 }
-
-// todo: remove unwrap and implement error types

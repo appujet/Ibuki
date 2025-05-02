@@ -1,19 +1,20 @@
 use axum::{
     body::Body,
     extract::{Path, Request},
-    http::{Response, StatusCode},
+    http::Response,
     middleware::Next,
 };
 
-use crate::constants::VERSION;
+use crate::{constants::VERSION, util::errors::EndpointError};
 
-pub async fn check(Path(version): Path<u8>, request: Request, next: Next) -> Response<Body> {
+pub async fn check(
+    Path(version): Path<u8>,
+    request: Request,
+    next: Next,
+) -> Result<Response<Body>, EndpointError> {
     if version != VERSION {
-        return Response::builder()
-            .status(StatusCode::BAD_REQUEST)
-            .body(Body::from("Unsupported Version"))
-            .unwrap();
+        return Err(EndpointError::UnprocessableEntity("Unsupported version"));
     }
 
-    next.run(request).await
+    Ok(next.run(request).await)
 }

@@ -1,21 +1,17 @@
-use axum::{body::Body, extract::Request, http::Response, http::StatusCode, middleware::Next};
+use axum::{body::Body, extract::Request, http::Response, middleware::Next};
 
-pub async fn authenticate(request: Request, next: Next) -> Response<Body> {
-    let Some(authorization) = request
+use crate::util::errors::EndpointError;
+
+pub async fn authenticate(request: Request, next: Next) -> Result<Response<Body>, EndpointError> {
+    let authorization = request
         .headers()
         .get("Authorization")
-        .map(|data| data.to_str().unwrap())
-    else {
-        return Response::builder()
-            .status(StatusCode::BAD_REQUEST)
-            .body(Body::from("Missing Authorization in headers"))
-            .unwrap();
-    };
+        .ok_or(EndpointError::MissingOption("Authorization"))?
+        .to_str()?;
 
-    // todo: do auth checks here and change placeholder
     if authorization != "placeholder" {
         // todo: return status code unathorized
     }
 
-    next.run(request).await
+    Ok(next.run(request).await)
 }

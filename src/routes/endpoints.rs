@@ -1,18 +1,29 @@
 use super::{DecodeQueryString, EncodeQueryString};
 use crate::util::decoder::decode_base64;
-use axum::{body::Body, extract::Query, response::Response};
 use crate::util::errors::EndpointError;
+use axum::{body::Body, extract::Query, response::Response};
 
+#[tracing::instrument]
 pub async fn get_player() {}
 
+#[tracing::instrument]
 pub async fn update_player() {}
 
+#[tracing::instrument]
 pub async fn destroy_player() {}
 
-pub async fn decode(query: Query<DecodeQueryString>) -> Result<Response<Body>, EndpointError<'static>> {
+#[tracing::instrument]
+pub async fn decode(query: Query<DecodeQueryString>) -> Result<Response<Body>, EndpointError> {
     let track = decode_base64(&query.track)?;
-    
-    Ok(Response::new(Body::from(serde_json::to_string_pretty(&track).unwrap())))
+
+    // dummy response
+    Ok(Response::new(Body::from(serde_json::to_string_pretty(
+        &track,
+    )?)))
 }
 
-pub async fn encode(query: Query<EncodeQueryString>) {}
+#[tracing::instrument]
+pub async fn encode(query: Query<EncodeQueryString>) -> Result<Response<Body>, EndpointError> {
+    // dummy response
+    Ok(Response::new(Body::from(query.0.identifier.clone())))
+}

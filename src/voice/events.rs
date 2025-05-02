@@ -38,6 +38,8 @@ impl EventHandler for ManagerEvent {
                     manager.user_id,
                     guild_id
                 );
+                // we just clear it if this is the case
+                manager.delete_connection(guild_id);
                 return;
             };
 
@@ -64,8 +66,17 @@ impl EventHandler for ManagerEvent {
                         },
                     };
 
-                    let serialized =
-                        serde_json::to_string(&LavalinkMessage::PlayerUpdate(event)).unwrap();
+                    let Ok(serialized) =
+                        serde_json::to_string(&LavalinkMessage::PlayerUpdate(event))
+                    else {
+                        tracing::warn!(
+                            "Serde player update encoding failed. [UserId: {}] [GuildId: {}] [Event: {}]",
+                            manager.user_id,
+                            guild_id,
+                            "PlayerUpdate"
+                        );
+                        return;
+                    };
 
                     client
                         .send(Message::Text(Utf8Bytes::from(serialized)))
@@ -94,10 +105,17 @@ impl EventHandler for ManagerEvent {
                         threshold_ms: duration.as_millis() as usize,
                     };
 
-                    let serialized = serde_json::to_string(&LavalinkMessage::Event(
+                    let Ok(serialized) = serde_json::to_string(&LavalinkMessage::Event(
                         PlayerEvents::TrackStuckEvent(event),
-                    ))
-                    .unwrap();
+                    )) else {
+                        tracing::warn!(
+                            "Serde player update encoding failed. [UserId: {}] [GuildId: {}] [Event: {}]",
+                            manager.user_id,
+                            guild_id,
+                            "PlayerStuck"
+                        );
+                        return;
+                    };
 
                     client
                         .send(Message::Text(Utf8Bytes::from(serialized)))
@@ -129,10 +147,17 @@ impl EventHandler for ManagerEvent {
                             reason: "Placeholder".into(),
                         };
 
-                        let serialized = serde_json::to_string(&LavalinkMessage::Event(
+                        let Ok(serialized) = serde_json::to_string(&LavalinkMessage::Event(
                             PlayerEvents::TrackEndEvent(event),
-                        ))
-                        .unwrap();
+                        )) else {
+                            tracing::warn!(
+                                "Serde player update encoding failed. [UserId: {}] [GuildId: {}] [Event: {}]",
+                                manager.user_id,
+                                guild_id,
+                                "PlayerEnd"
+                            );
+                            return;
+                        };
 
                         client
                             .send(Message::Text(Utf8Bytes::from(serialized)))
@@ -160,10 +185,17 @@ impl EventHandler for ManagerEvent {
                             },
                         };
 
-                        let serialized = serde_json::to_string(&LavalinkMessage::Event(
+                        let Ok(serialized) = serde_json::to_string(&LavalinkMessage::Event(
                             PlayerEvents::TrackStartEvent(event),
-                        ))
-                        .unwrap();
+                        )) else {
+                            tracing::warn!(
+                                "Serde player update encoding failed. [UserId: {}] [GuildId: {}] [Event: {}]",
+                                manager.user_id,
+                                guild_id,
+                                "PlayerStart"
+                            );
+                            return;
+                        };
 
                         client
                             .send(Message::Text(Utf8Bytes::from(serialized)))
@@ -197,10 +229,17 @@ impl EventHandler for ManagerEvent {
                             },
                         };
 
-                        let serialized = serde_json::to_string(&LavalinkMessage::Event(
+                        let Ok(serialized) = serde_json::to_string(&LavalinkMessage::Event(
                             PlayerEvents::TrackExceptionEvent(event),
-                        ))
-                        .unwrap();
+                        )) else {
+                            tracing::warn!(
+                                "Serde player update encoding failed. [UserId: {}] [GuildId: {}] [Event: {}]",
+                                manager.user_id,
+                                guild_id,
+                                "PlayerEnd"
+                            );
+                            return;
+                        };
 
                         client
                             .send(Message::Text(Utf8Bytes::from(serialized)))
@@ -219,10 +258,17 @@ impl EventHandler for ManagerEvent {
                         by_remote: true,
                     };
 
-                    let serialized = serde_json::to_string(&LavalinkMessage::Event(
+                    let Ok(serialized) = serde_json::to_string(&LavalinkMessage::Event(
                         PlayerEvents::WebSocketClosedEvent(event),
-                    ))
-                    .unwrap();
+                    )) else {
+                        tracing::warn!(
+                            "Serde player update encoding failed. [UserId: {}] [GuildId: {}] [Event: {}]",
+                            manager.user_id,
+                            guild_id,
+                            "PlayerEnd"
+                        );
+                        return;
+                    };
 
                     client
                         .send(Message::Text(Utf8Bytes::from(serialized)))

@@ -169,7 +169,11 @@ impl WebsocketClient {
             session_id: self.session_id.to_string(),
         };
 
-        let serialized = serde_json::to_string(&LavalinkMessage::Ready(event)).unwrap();
+        // Normally, this should never happen, but we ignore it if it does happen and log it
+        let Ok(serialized) = serde_json::to_string(&LavalinkMessage::Ready(event)) else {
+            tracing::warn!("Failed to encode ready op, this should not happen usually");
+            return Ok(resumed);
+        };
 
         self.send(Message::Text(Utf8Bytes::from(serialized))).await;
 
@@ -226,13 +230,13 @@ pub async fn handle_websocket_upgrade_request(
     data: WebsocketRequestData,
     addr: ConnectInfo<SocketAddr>,
 ) {
-    let mut client = Clients.get_mut(&data.user_id).unwrap_or_else(|| {
+    let Some(mut client) = Clients.get_mut(&data.user_id) else {
         let client = WebsocketClient::new(data.user_id);
 
         Clients.insert(data.user_id, client);
 
-        Clients.get_mut(&data.user_id).unwrap()
-    });
+        return Box::pin(handle_websocket_upgrade_request(socket, data, addr)).await;
+    };
 
     match client.connect(socket, data.session_id).await {
         Ok(resumed) => {
