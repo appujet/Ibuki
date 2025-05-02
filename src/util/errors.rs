@@ -26,6 +26,14 @@ pub enum Base64DecodeError {
 }
 
 #[derive(Error, Debug)]
+pub enum Base64EncodeError {
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
+    #[error("Unknown version detected. Got {0}")]
+    UnknownVersion(u32),
+}
+
+#[derive(Error, Debug)]
 pub enum EndpointError {
     #[error("Required option {0} missing in headers")]
     MissingOption(&'static str),
@@ -35,6 +43,8 @@ pub enum EndpointError {
     JsonError(#[from] serde_json::Error),
     #[error(transparent)]
     Base64Decode(#[from] Base64DecodeError),
+    #[error(transparent)]
+    Base64Encode(#[from] Base64EncodeError),
     #[error(transparent)]
     ToStr(#[from] http::header::ToStrError),
     #[error(transparent)]
@@ -57,6 +67,10 @@ impl IntoResponse for EndpointError {
             EndpointError::Base64Decode(base64_decode_error) => (
                 StatusCode::UNSUPPORTED_MEDIA_TYPE,
                 base64_decode_error.to_string(),
+            ),
+            EndpointError::Base64Encode(base64_encode_error) => (
+                StatusCode::UNSUPPORTED_MEDIA_TYPE,
+                base64_encode_error.to_string(),
             ),
             EndpointError::ToStr(to_str_error) => {
                 (StatusCode::UNPROCESSABLE_ENTITY, to_str_error.to_string())
