@@ -188,6 +188,22 @@ pub struct LavalinkPlayer {
     pub filters: LavalinkFilters,
 }
 
+#[derive(Serialize, Debug)]
+pub struct RawTrackInfo {
+    pub flags: u32,
+    pub source: String,
+    pub identifier: String,
+    pub author: String,
+    pub length: u64,
+    pub is_stream: bool,
+    pub position: u64,
+    pub title: String,
+    pub uri: Option<String>,
+    pub artwork_url: Option<String>,
+    pub isrc: Option<String>,
+    pub version: u32,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TrackInfo {

@@ -1,5 +1,6 @@
-use super::decoder::TrackInfo;
-use crate::{constants::TRACK_INFO_VERSIONED, util::errors::Base64EncodeError};
+use crate::{
+    constants::TRACK_INFO_VERSIONED, models::RawTrackInfo, util::errors::Base64EncodeError,
+};
 use base64::{Engine, prelude::BASE64_STANDARD};
 use byteorder::{BigEndian, WriteBytesExt};
 use std::io::{Cursor, Write};
@@ -27,7 +28,7 @@ fn write_optional_string(
     Ok(())
 }
 
-fn encode_v1(wtr: &mut Cursor<Vec<u8>>, track: &TrackInfo) -> Result<(), Base64EncodeError> {
+fn encode_v1(wtr: &mut Cursor<Vec<u8>>, track: &RawTrackInfo) -> Result<(), Base64EncodeError> {
     write_string(wtr, &track.title)?;
     write_string(wtr, &track.author)?;
     wtr.write_u64::<BigEndian>(track.length)?;
@@ -38,7 +39,7 @@ fn encode_v1(wtr: &mut Cursor<Vec<u8>>, track: &TrackInfo) -> Result<(), Base64E
     Ok(())
 }
 
-fn encode_v2(wtr: &mut Cursor<Vec<u8>>, track: &TrackInfo) -> Result<(), Base64EncodeError> {
+fn encode_v2(wtr: &mut Cursor<Vec<u8>>, track: &RawTrackInfo) -> Result<(), Base64EncodeError> {
     write_string(wtr, &track.title)?;
     write_string(wtr, &track.author)?;
     wtr.write_u64::<BigEndian>(track.length)?;
@@ -50,7 +51,7 @@ fn encode_v2(wtr: &mut Cursor<Vec<u8>>, track: &TrackInfo) -> Result<(), Base64E
     Ok(())
 }
 
-fn encode_v3(wtr: &mut Cursor<Vec<u8>>, track: &TrackInfo) -> Result<(), Base64EncodeError> {
+fn encode_v3(wtr: &mut Cursor<Vec<u8>>, track: &RawTrackInfo) -> Result<(), Base64EncodeError> {
     write_string(wtr, &track.title)?;
     write_string(wtr, &track.author)?;
     wtr.write_u64::<BigEndian>(track.length)?;
@@ -64,7 +65,8 @@ fn encode_v3(wtr: &mut Cursor<Vec<u8>>, track: &TrackInfo) -> Result<(), Base64E
     Ok(())
 }
 
-pub fn encode_base64(track: &TrackInfo) -> Result<String, Base64EncodeError> {
+// we will encode using v3 only in this library
+pub fn encode_base64(track: &RawTrackInfo) -> Result<String, Base64EncodeError> {
     let mut buffer = Vec::new();
     let mut writer = Cursor::new(buffer);
 
@@ -74,7 +76,6 @@ pub fn encode_base64(track: &TrackInfo) -> Result<String, Base64EncodeError> {
         flags |= TRACK_INFO_VERSIONED;
     }
 
-    // Write header
     let value = (flags << 30) | 0x3FFFFFFF;
     writer.write_u32::<BigEndian>(value)?;
 
