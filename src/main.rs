@@ -20,14 +20,13 @@ use tower::ServiceBuilder;
 use tracing::Level;
 use tracing_subscriber::fmt;
 
-mod auth;
 mod constants;
 mod models;
 mod routes;
 mod util;
-mod version;
 mod voice;
 mod ws;
+mod middlewares;
 
 #[allow(non_upper_case_globals)]
 pub static Clients: LazyLock<DashMap<UserId, WebsocketClient>> = LazyLock::new(DashMap::new);
@@ -113,8 +112,8 @@ async fn main() {
         )
         .route_layer(
             ServiceBuilder::new()
-                .layer(from_fn(version::check))
-                .layer(from_fn(auth::authenticate)),
+                .layer(from_fn(middlewares::version::check))
+                .layer(from_fn(middlewares::auth::authenticate)),
         )
         .route("/", routing::get(routes::global::landing));
 

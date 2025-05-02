@@ -8,6 +8,7 @@ use base64::{Engine, prelude::BASE64_STANDARD};
 use byteorder::{BigEndian, ReadBytesExt};
 use serde::Serialize;
 use std::io::{Cursor, Read};
+use crate::util::errors::Base64DecodeError;
 
 #[derive(Serialize, Debug)]
 pub struct TrackInfo {
@@ -29,31 +30,31 @@ static TRACK_INFO_VERSIONED: u32 = 1;
 static TRACK_INFO_VERSION: u32 = 2;
 static PARAMETERS_SEPARATOR: &str = "|";
 
-fn read_string(rdr: &mut Cursor<Vec<u8>>) -> String {
-    let len = rdr.read_u16::<BigEndian>().unwrap();
+fn read_string(rdr: &mut Cursor<Vec<u8>>) -> Result<String, Base64DecodeError> {
+    let len = rdr.read_u16::<BigEndian>()?;
     let mut buf: Vec<u8> = vec![0; len as usize];
-    rdr.read_exact(&mut buf).unwrap();
-    String::from_utf8(buf).unwrap()
+    rdr.read_exact(&mut buf)?;
+    Ok(String::from_utf8(buf)?)
 }
 
-fn optional_read_string(rdr: &mut Cursor<Vec<u8>>) -> Option<String> {
-    if rdr.read_u8().unwrap() != 0 {
-        Some(read_string(rdr))
+fn optional_read_string(rdr: &mut Cursor<Vec<u8>>) -> Result<Option<String>, Base64DecodeError> {
+    if rdr.read_u8()? != 0 {
+        Ok(Some(read_string(rdr)?))
     } else {
-        None
+        Ok(None)
     }
 }
 
-fn parse_v1(mut rdr: Cursor<Vec<u8>>, flags: u32) -> TrackInfo {
-    let title = read_string(&mut rdr);
-    let author = read_string(&mut rdr);
-    let length = rdr.read_u64::<BigEndian>().unwrap();
-    let identifier = read_string(&mut rdr);
-    let is_stream = rdr.read_u8().unwrap() != 0;
-    let source = read_string(&mut rdr);
-    let position = rdr.read_u64::<BigEndian>().unwrap();
+fn parse_v1(mut rdr: Cursor<Vec<u8>>, flags: u32) -> Result<TrackInfo, Base64DecodeError> {
+    let title = read_string(&mut rdr)?;
+    let author = read_string(&mut rdr)?;
+    let length = rdr.read_u64::<BigEndian>()?;
+    let identifier = read_string(&mut rdr)?;
+    let is_stream = rdr.read_u8()? != 0;
+    let source = read_string(&mut rdr)?;
+    let position = rdr.read_u64::<BigEndian>()?;
 
-    TrackInfo {
+    Ok(TrackInfo {
         flags,
         source,
         identifier,
@@ -66,20 +67,20 @@ fn parse_v1(mut rdr: Cursor<Vec<u8>>, flags: u32) -> TrackInfo {
         artwork_url: None,
         isrc: None,
         version: 1,
-    }
+    })
 }
 
-fn parse_v2(mut rdr: Cursor<Vec<u8>>, flags: u32) -> TrackInfo {
-    let title = read_string(&mut rdr);
-    let author = read_string(&mut rdr);
-    let length = rdr.read_u64::<BigEndian>().unwrap();
-    let identifier = read_string(&mut rdr);
-    let is_stream = rdr.read_u8().unwrap() != 0;
-    let uri = optional_read_string(&mut rdr);
-    let source = read_string(&mut rdr);
-    let position = rdr.read_u64::<BigEndian>().unwrap();
+fn parse_v2(mut rdr: Cursor<Vec<u8>>, flags: u32) -> Result<TrackInfo, Base64DecodeError> {
+    let title = read_string(&mut rdr)?;
+    let author = read_string(&mut rdr)?;
+    let length = rdr.read_u64::<BigEndian>()?;
+    let identifier = read_string(&mut rdr)?;
+    let is_stream = rdr.read_u8()? != 0;
+    let uri = optional_read_string(&mut rdr)?;
+    let source = read_string(&mut rdr)?;
+    let position = rdr.read_u64::<BigEndian>()?;
 
-    TrackInfo {
+    Ok(TrackInfo {
         flags,
         source,
         identifier,
@@ -92,22 +93,22 @@ fn parse_v2(mut rdr: Cursor<Vec<u8>>, flags: u32) -> TrackInfo {
         artwork_url: None,
         isrc: None,
         version: 2,
-    }
+    })
 }
 
-fn parse_v3(mut rdr: Cursor<Vec<u8>>, flags: u32) -> TrackInfo {
-    let title = read_string(&mut rdr);
-    let author = read_string(&mut rdr);
-    let length = rdr.read_u64::<BigEndian>().unwrap();
-    let identifier = read_string(&mut rdr);
-    let is_stream = rdr.read_u8().unwrap() != 0;
-    let uri = optional_read_string(&mut rdr);
-    let artwork_url = optional_read_string(&mut rdr);
-    let isrc = optional_read_string(&mut rdr);
-    let source = read_string(&mut rdr);
-    let position = rdr.read_u64::<BigEndian>().unwrap();
+fn parse_v3(mut rdr: Cursor<Vec<u8>>, flags: u32) -> Result<TrackInfo, Base64DecodeError> {
+    let title = read_string(&mut rdr)?;
+    let author = read_string(&mut rdr)?;
+    let length = rdr.read_u64::<BigEndian>()?;
+    let identifier = read_string(&mut rdr)?;
+    let is_stream = rdr.read_u8()? != 0;
+    let uri = optional_read_string(&mut rdr)?;
+    let artwork_url = optional_read_string(&mut rdr)?;
+    let isrc = optional_read_string(&mut rdr)?;
+    let source = read_string(&mut rdr)?;
+    let position = rdr.read_u64::<BigEndian>()?;
 
-    TrackInfo {
+    Ok(TrackInfo {
         flags,
         source,
         identifier,
@@ -120,26 +121,26 @@ fn parse_v3(mut rdr: Cursor<Vec<u8>>, flags: u32) -> TrackInfo {
         artwork_url,
         isrc,
         version: 3,
-    }
+    })
 }
 
-pub fn decode_base64(encoded: &String) -> TrackInfo {
-    let decoded = BASE64_STANDARD.decode(encoded).unwrap();
+pub fn decode_base64(encoded: &String) -> Result<TrackInfo, Base64DecodeError> {
+    let decoded = BASE64_STANDARD.decode(encoded)?;
     let mut rdr = Cursor::new(decoded);
-    let value = rdr.read_u32::<BigEndian>().unwrap();
+    let value = rdr.read_u32::<BigEndian>()?;
     let flags = (value & 0xC0000000) >> 30;
     let message_size = value & 0x3FFFFFFF;
     let version = if flags & TRACK_INFO_VERSIONED != 0 {
-        rdr.read_u8().unwrap()
+        rdr.read_u8()?
     } else {
         1
     };
 
     match version {
-        1 => parse_v1(rdr, flags),
-        2 => parse_v2(rdr, flags),
-        3 => parse_v3(rdr, flags),
-        _ => panic!("Unsupported"),
+        1 => Ok(parse_v1(rdr, flags)?),
+        2 => Ok(parse_v2(rdr, flags)?),
+        3 => Ok(parse_v3(rdr, flags)?),
+        _ => Err(Base64DecodeError::UnknownVersion(version)),
     }
 }
 
