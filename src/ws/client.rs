@@ -1,5 +1,5 @@
 use crate::Clients;
-use crate::models::lavalink::{LavalinkMessage, Ready};
+use crate::models::{LavalinkMessage, Ready};
 use crate::voice::manager::PlayerManager;
 use axum::Error;
 use axum::body::Bytes;

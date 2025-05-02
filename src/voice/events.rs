@@ -1,5 +1,5 @@
 use crate::Clients;
-use crate::models::lavalink::{
+use crate::models::{
     Exception, LavalinkMessage, LavalinkPlayerState, PlayerEvents, PlayerUpdate, Track, TrackEnd,
     TrackException, TrackInfo, TrackStart, TrackStuck, WebSocketClosed,
 };
@@ -17,27 +17,41 @@ pub struct ManagerEvent {
 
 #[async_trait]
 impl EventHandler for ManagerEvent {
-    async fn act(&self, ctx: &EventContext<'_>) -> Option<Event> {
+    async fn act(&self, _: &EventContext<'_>) -> Option<Event> {
         let manager = self.manager.clone();
         let guild_id = self.guild_id;
         let event_type = self.event_type;
 
-        let state = match ctx {
-            EventContext::Track([(state, _)]) => Some((*state).clone()),
-            _ => None,
-        };
-
         tokio::spawn(async move {
+            let Some(handle) = manager.get_handle(guild_id) else {
+                tracing::warn!(
+                    "No track handle found for [UserId: {}] [GuildId: {}]. Probably a broken client?",
+                    manager.user_id,
+                    guild_id
+                );
+                return;
+            };
+
             let Some(client) = Clients.get(&manager.user_id) else {
                 tracing::warn!(
-                    "No websocket client found for [UserId: {}]. Probably a broken client?",
-                    manager.user_id
+                    "No websocket client found for [UserId: {}] [GuildId: {}]. Probably a broken client?",
+                    manager.user_id,
+                    guild_id
+                );
+                return;
+            };
+
+            // todo: probably limit this in end and start event
+            let Ok(state) = handle.get_info().await else {
+                tracing::warn!(
+                    "Can't fetch the track state for [UserId: {}] [GuildId: {}]. Probably a broken client?",
+                    manager.user_id,
+                    guild_id
                 );
                 return;
             };
 
             // todo: fix event data by slowly adding data on placeholder values as implementation continues
-
             match event_type {
                 Event::Periodic(_, _) => {
                     let event = PlayerUpdate {
@@ -89,115 +103,111 @@ impl EventHandler for ManagerEvent {
                         .send(Message::Text(Utf8Bytes::from(serialized)))
                         .await;
                 }
-                Event::Track(event) => {
-                    let st = state.unwrap();
+                Event::Track(event) => match event {
+                    TrackEvent::End => {
+                        manager.delete_handle(guild_id);
 
-                    match event {
-                        TrackEvent::End => {
-                            manager.delete_handle(guild_id);
-
-                            let event = TrackEnd {
-                                guild_id: guild_id.0.get(),
-                                track: Track {
-                                    encoded: "Placeholder".into(),
-                                    info: TrackInfo {
-                                        identifier: "Placeholder".into(),
-                                        is_seekable: true,
-                                        author: "Placeholder".into(),
-                                        length: st.position.as_millis() as usize,
-                                        is_stream: false,
-                                        position: st.position.as_millis() as usize,
-                                        title: "Placeholder".into(),
-                                        uri: None,
-                                        artwork_url: None,
-                                        isrc: None,
-                                        source_name: "Placeholder".into(),
-                                    },
-                                    plugin_info: serde_json::Value::Null,
+                        let event = TrackEnd {
+                            guild_id: guild_id.0.get(),
+                            track: Track {
+                                encoded: "Placeholder".into(),
+                                info: TrackInfo {
+                                    identifier: "Placeholder".into(),
+                                    is_seekable: true,
+                                    author: "Placeholder".into(),
+                                    length: state.position.as_millis() as usize,
+                                    is_stream: false,
+                                    position: state.position.as_millis() as usize,
+                                    title: "Placeholder".into(),
+                                    uri: None,
+                                    artwork_url: None,
+                                    isrc: None,
+                                    source_name: "Placeholder".into(),
                                 },
-                                reason: "Placeholder".into(),
-                            };
+                                plugin_info: serde_json::Value::Null,
+                            },
+                            reason: "Placeholder".into(),
+                        };
 
-                            let serialized = serde_json::to_string(&LavalinkMessage::Event(
-                                PlayerEvents::TrackEndEvent(event),
-                            ))
-                            .unwrap();
+                        let serialized = serde_json::to_string(&LavalinkMessage::Event(
+                            PlayerEvents::TrackEndEvent(event),
+                        ))
+                        .unwrap();
 
-                            client
-                                .send(Message::Text(Utf8Bytes::from(serialized)))
-                                .await;
-                        }
-                        TrackEvent::Playable => {
-                            let event = TrackStart {
-                                guild_id: guild_id.0.get(),
-                                track: Track {
-                                    encoded: "Placeholder".into(),
-                                    info: TrackInfo {
-                                        identifier: "Placeholder".into(),
-                                        is_seekable: true,
-                                        author: "Placeholder".into(),
-                                        length: st.position.as_millis() as usize,
-                                        is_stream: false,
-                                        position: st.position.as_millis() as usize,
-                                        title: "Placeholder".into(),
-                                        uri: None,
-                                        artwork_url: None,
-                                        isrc: None,
-                                        source_name: "Placeholder".into(),
-                                    },
-                                    plugin_info: serde_json::Value::Null,
-                                },
-                            };
-
-                            let serialized = serde_json::to_string(&LavalinkMessage::Event(
-                                PlayerEvents::TrackStartEvent(event),
-                            ))
-                            .unwrap();
-
-                            client
-                                .send(Message::Text(Utf8Bytes::from(serialized)))
-                                .await;
-                        }
-                        TrackEvent::Error => {
-                            let event = TrackException {
-                                guild_id: guild_id.0.get(),
-                                track: Track {
-                                    encoded: "Placeholder".into(),
-                                    info: TrackInfo {
-                                        identifier: "Placeholder".into(),
-                                        is_seekable: true,
-                                        author: "Placeholder".into(),
-                                        length: st.position.as_millis() as usize,
-                                        is_stream: false,
-                                        position: st.position.as_millis() as usize,
-                                        title: "Placeholder".into(),
-                                        uri: None,
-                                        artwork_url: None,
-                                        isrc: None,
-                                        source_name: "Placeholder".into(),
-                                    },
-                                    plugin_info: serde_json::Value::Null,
-                                },
-                                exception: Exception {
-                                    guild_id: guild_id.0.get(),
-                                    message: None,
-                                    severity: "Placeholder".into(),
-                                    cause: "Placeholder".into(),
-                                },
-                            };
-
-                            let serialized = serde_json::to_string(&LavalinkMessage::Event(
-                                PlayerEvents::TrackExceptionEvent(event),
-                            ))
-                            .unwrap();
-
-                            client
-                                .send(Message::Text(Utf8Bytes::from(serialized)))
-                                .await;
-                        }
-                        _ => {}
+                        client
+                            .send(Message::Text(Utf8Bytes::from(serialized)))
+                            .await;
                     }
-                }
+                    TrackEvent::Playable => {
+                        let event = TrackStart {
+                            guild_id: guild_id.0.get(),
+                            track: Track {
+                                encoded: "Placeholder".into(),
+                                info: TrackInfo {
+                                    identifier: "Placeholder".into(),
+                                    is_seekable: true,
+                                    author: "Placeholder".into(),
+                                    length: state.position.as_millis() as usize,
+                                    is_stream: false,
+                                    position: state.position.as_millis() as usize,
+                                    title: "Placeholder".into(),
+                                    uri: None,
+                                    artwork_url: None,
+                                    isrc: None,
+                                    source_name: "Placeholder".into(),
+                                },
+                                plugin_info: serde_json::Value::Null,
+                            },
+                        };
+
+                        let serialized = serde_json::to_string(&LavalinkMessage::Event(
+                            PlayerEvents::TrackStartEvent(event),
+                        ))
+                        .unwrap();
+
+                        client
+                            .send(Message::Text(Utf8Bytes::from(serialized)))
+                            .await;
+                    }
+                    TrackEvent::Error => {
+                        let event = TrackException {
+                            guild_id: guild_id.0.get(),
+                            track: Track {
+                                encoded: "Placeholder".into(),
+                                info: TrackInfo {
+                                    identifier: "Placeholder".into(),
+                                    is_seekable: true,
+                                    author: "Placeholder".into(),
+                                    length: state.position.as_millis() as usize,
+                                    is_stream: false,
+                                    position: state.position.as_millis() as usize,
+                                    title: "Placeholder".into(),
+                                    uri: None,
+                                    artwork_url: None,
+                                    isrc: None,
+                                    source_name: "Placeholder".into(),
+                                },
+                                plugin_info: serde_json::Value::Null,
+                            },
+                            exception: Exception {
+                                guild_id: guild_id.0.get(),
+                                message: None,
+                                severity: "Placeholder".into(),
+                                cause: "Placeholder".into(),
+                            },
+                        };
+
+                        let serialized = serde_json::to_string(&LavalinkMessage::Event(
+                            PlayerEvents::TrackExceptionEvent(event),
+                        ))
+                        .unwrap();
+
+                        client
+                            .send(Message::Text(Utf8Bytes::from(serialized)))
+                            .await;
+                    }
+                    _ => {}
+                },
                 Event::Core(CoreEvent::DriverDisconnect) => {
                     manager.delete_handle(guild_id);
                     manager.delete_connection(guild_id);

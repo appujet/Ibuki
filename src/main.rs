@@ -7,10 +7,10 @@ use axum::{
 };
 use dashmap::DashMap;
 use dotenv::dotenv;
-use models::lavalink::{Cpu, LavalinkMessage, Memory, Stats};
+use models::{Cpu, LavalinkMessage, Memory, Stats};
 use songbird::id::UserId;
-use std::net::SocketAddr;
 use std::sync::LazyLock;
+use std::{env::set_var, net::SocketAddr};
 use tokio::{
     main, net,
     task::JoinSet,
@@ -24,6 +24,7 @@ mod auth;
 mod constants;
 mod models;
 mod routes;
+mod util;
 mod version;
 mod voice;
 mod ws;
@@ -33,6 +34,8 @@ pub static Clients: LazyLock<DashMap<UserId, WebsocketClient>> = LazyLock::new(D
 
 #[main(flavor = "multi_thread")]
 async fn main() {
+    unsafe { set_var("RUST_BACKTRACE", "1") };
+
     dotenv().ok();
 
     let subscriber = fmt()
@@ -93,16 +96,20 @@ async fn main() {
     let app = Router::new()
         .route("/v{version}/websocket", routing::any(routes::global::ws))
         .route(
-            "/v{version}/sessions/{session_id}/players/{guild_id}",
-            routing::get(routes::lavalink::get_player),
+            "/v{version}/decodetrack",
+            routing::get(routes::endpoints::decode),
         )
         .route(
             "/v{version}/sessions/{session_id}/players/{guild_id}",
-            routing::patch(routes::lavalink::update_player),
+            routing::get(routes::endpoints::get_player),
         )
         .route(
             "/v{version}/sessions/{session_id}/players/{guild_id}",
-            routing::delete(routes::lavalink::destroy_player),
+            routing::patch(routes::endpoints::update_player),
+        )
+        .route(
+            "/v{version}/sessions/{session_id}/players/{guild_id}",
+            routing::delete(routes::endpoints::destroy_player),
         )
         .route_layer(
             ServiceBuilder::new()

@@ -1,8 +1,7 @@
 use super::events::ManagerEvent;
 use dashmap::DashMap;
 use songbird::id::{GuildId, UserId};
-use songbird::input::Input;
-use songbird::tracks::TrackHandle;
+use songbird::tracks::{Track, TrackHandle};
 use songbird::{Config, ConnectionInfo, CoreEvent, Driver, Event, TrackEvent};
 use std::sync::Arc;
 use std::time::Duration;
@@ -78,7 +77,7 @@ impl PlayerManager {
         self.handles.get(&guild_id).map(|data| data.clone())
     }
 
-    pub async fn create_handle(&self, guild_id: GuildId, track: Input) {
+    pub async fn create_handle(&self, guild_id: GuildId, track: Track) {
         let Some(mut driver) = self.connections.get_mut(&guild_id) else {
             return;
         };
@@ -91,7 +90,7 @@ impl PlayerManager {
             sleep(Duration::from_millis(1)).await;
         }
 
-        let handle = driver.play_input(track);
+        let handle = driver.play_only(track);
 
         handle
             .add_event(
