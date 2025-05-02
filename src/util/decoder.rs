@@ -1,6 +1,6 @@
 //
 // Lavalink seems to encode tracks into binary, then serializing it via base64
-// And I suck at dealing with binariy
+// And I suck at dealing with binary
 // Thanks to @Takase (https://github.com/takase1121) for helping me with this
 //
 

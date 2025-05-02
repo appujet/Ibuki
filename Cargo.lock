@@ -1081,6 +1081,7 @@ dependencies = [
  "serde_json",
  "songbird",
  "symphonia",
+ "thiserror 2.0.12",
  "tokio",
  "tower",
  "tracing",
