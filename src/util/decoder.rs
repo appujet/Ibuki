@@ -26,6 +26,9 @@ fn optional_read_string(rdr: &mut Cursor<Vec<u8>>) -> Result<Option<String>, Bas
     }
 }
 
+/**
+ * This decodes lavalink base64 strings just fine
+ */
 pub fn decode_base64(encoded: &String) -> Result<RawTrackInfo, Base64DecodeError> {
     let decoded = BASE64_STANDARD.decode(encoded)?;
 

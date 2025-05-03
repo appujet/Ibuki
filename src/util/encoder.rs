@@ -5,9 +5,9 @@ use base64::{Engine, prelude::BASE64_STANDARD};
 use byteorder::{BigEndian, WriteBytesExt};
 use std::io::{Cursor, Write};
 
-fn write_string(wtr: &mut Cursor<Vec<u8>>, s: &str) -> Result<(), Base64EncodeError> {
-    wtr.write_u16::<BigEndian>(s.len() as u16)?;
-    wtr.write_all(s.as_bytes())?;
+fn write_string(wtr: &mut Cursor<Vec<u8>>, message: &str) -> Result<(), Base64EncodeError> {
+    wtr.write_u16::<BigEndian>(message.len() as u16)?;
+    wtr.write_all(message.as_bytes())?;
     Ok(())
 }
 
@@ -27,6 +27,9 @@ fn optional_write_string(
     Ok(())
 }
 
+/**
+ * Unfortunately this isnt cross compatible with lavalink for some reason
+ */
 pub fn encode_base64(track_info: &RawTrackInfo) -> Result<String, Base64EncodeError> {
     if track_info.version > 3 || track_info.version == 0 {
         return Err(Base64EncodeError::UnknownVersion(track_info.version));

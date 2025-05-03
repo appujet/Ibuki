@@ -16,22 +16,6 @@ pub async fn destroy_player() {}
 pub async fn decode(query: Query<DecodeQueryString>) -> Result<Response<Body>, EndpointError> {
     let track = decode_base64(&query.track)?;
 
-    let decoded_and_encoded = encode_base64(&track)?;
-
-    // debug logs, will be removed soon
-    println!(
-        "Original: [Length: {}]          {:?}",
-        query.track.len(),
-        query.track
-    );
-    println!(
-        "Decoded & Encoded: [Length: {}] {:?}",
-        decoded_and_encoded.len(),
-        decoded_and_encoded,
-    );
-
-    // assert_eq!(query.track.as_str(), decoded_and_encoded.as_str());
-
     // dummy response
     Ok(Response::new(Body::from(serde_json::to_string_pretty(
         &track,
