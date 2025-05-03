@@ -9,6 +9,7 @@ use dashmap::DashMap;
 use dotenv::dotenv;
 use models::{Cpu, LavalinkMessage, Memory, Stats};
 use songbird::id::UserId;
+use source::SourceManager;
 use std::sync::LazyLock;
 use std::{env::set_var, net::SocketAddr};
 use tokio::{
@@ -24,12 +25,16 @@ mod constants;
 mod middlewares;
 mod models;
 mod routes;
+mod source;
 mod util;
 mod voice;
 mod ws;
 
 #[allow(non_upper_case_globals)]
 pub static Clients: LazyLock<DashMap<UserId, WebsocketClient>> = LazyLock::new(DashMap::new);
+
+#[allow(non_upper_case_globals)]
+pub static Sources: LazyLock<SourceManager> = LazyLock::new(SourceManager::new);
 
 #[main(flavor = "multi_thread")]
 async fn main() {
@@ -97,6 +102,10 @@ async fn main() {
         .route(
             "/v{version}/decodetrack",
             routing::get(routes::endpoints::decode),
+        )
+        .route(
+            "/v{version}/loadtracks",
+            routing::get(routes::endpoints::encode),
         )
         .route(
             "/v{version}/sessions/{session_id}/players/{guild_id}",

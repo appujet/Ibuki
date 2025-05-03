@@ -1,6 +1,4 @@
-use crate::{
-    constants::TRACK_INFO_VERSIONED, models::RawTrackInfo, util::errors::Base64EncodeError,
-};
+use crate::{constants::TRACK_INFO_VERSIONED, models::TrackInfo, util::errors::Base64EncodeError};
 use base64::{Engine, prelude::BASE64_STANDARD};
 use byteorder::{BigEndian, WriteBytesExt};
 use std::io::{Cursor, Write};
@@ -30,14 +28,12 @@ fn optional_write_string(
 /**
  * Unfortunately this isnt cross compatible with lavalink for some reason
  */
-pub fn encode_base64(track_info: &RawTrackInfo) -> Result<String, Base64EncodeError> {
-    if track_info.version > 3 || track_info.version == 0 {
-        return Err(Base64EncodeError::UnknownVersion(track_info.version));
-    }
+pub fn encode_base64(track_info: &TrackInfo) -> Result<String, Base64EncodeError> {
+    let flags = 0;
 
     let mut wtr = Cursor::new(Vec::new());
 
-    wtr.write_u32::<BigEndian>(((track_info.flags & 0x3) << 30) | TRACK_INFO_VERSIONED)?;
+    wtr.write_u32::<BigEndian>(((flags & 0x3) << 30) | TRACK_INFO_VERSIONED)?;
 
     wtr.write_u8(3)?;
 
@@ -51,7 +47,7 @@ pub fn encode_base64(track_info: &RawTrackInfo) -> Result<String, Base64EncodeEr
     optional_write_string(&mut wtr, &track_info.artwork_url)?;
     optional_write_string(&mut wtr, &track_info.isrc)?;
 
-    write_string(&mut wtr, &track_info.source)?;
+    write_string(&mut wtr, &track_info.source_name)?;
 
     wtr.write_u64::<BigEndian>(track_info.position)?;
 

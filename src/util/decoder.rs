@@ -4,9 +4,7 @@
 // Thanks to @Takase (https://github.com/takase1121) for helping me with this
 //
 
-use crate::{
-    constants::TRACK_INFO_VERSIONED, models::RawTrackInfo, util::errors::Base64DecodeError,
-};
+use crate::{constants::TRACK_INFO_VERSIONED, models::TrackInfo, util::errors::Base64DecodeError};
 use base64::{Engine, prelude::BASE64_STANDARD};
 use byteorder::{BigEndian, ReadBytesExt};
 use std::io::{Cursor, Read};
@@ -29,7 +27,7 @@ fn optional_read_string(rdr: &mut Cursor<Vec<u8>>) -> Result<Option<String>, Bas
 /**
  * This decodes lavalink base64 strings just fine
  */
-pub fn decode_base64(encoded: &String) -> Result<RawTrackInfo, Base64DecodeError> {
+pub fn decode_base64(encoded: &String) -> Result<TrackInfo, Base64DecodeError> {
     let decoded = BASE64_STANDARD.decode(encoded)?;
 
     let mut rdr = Cursor::new(decoded);
@@ -57,22 +55,21 @@ pub fn decode_base64(encoded: &String) -> Result<RawTrackInfo, Base64DecodeError
     let artwork_url = optional_read_string(&mut rdr)?;
     let isrc = optional_read_string(&mut rdr)?;
 
-    let source = read_string(&mut rdr)?;
+    let source_name = read_string(&mut rdr)?;
 
     let position = rdr.read_u64::<BigEndian>()?;
 
-    Ok(RawTrackInfo {
-        flags,
-        version,
+    Ok(TrackInfo {
         title,
         author,
         length,
         identifier,
         is_stream,
+        is_seekable: !is_stream,
         uri,
         artwork_url,
         isrc,
-        source,
+        source_name,
         position,
     })
 }

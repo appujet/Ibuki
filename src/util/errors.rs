@@ -4,6 +4,14 @@ use axum::response::{IntoResponse, Response};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
+pub enum ResolverError {
+    #[error("Important Data Missing: {0}")]
+    MissingRequiredData(&'static str),
+    #[error(transparent)]
+    AudioStream(#[from] songbird::input::AudioStreamError),
+}
+
+#[derive(Error, Debug)]
 pub enum PlayerManagerError {
     #[error(transparent)]
     Connection(#[from] songbird::error::ConnectionError),
@@ -29,8 +37,6 @@ pub enum Base64DecodeError {
 pub enum Base64EncodeError {
     #[error(transparent)]
     Io(#[from] std::io::Error),
-    #[error("Unknown version detected. Got {0}")]
-    UnknownVersion(u8),
 }
 
 #[derive(Error, Debug)]
@@ -49,6 +55,8 @@ pub enum EndpointError {
     ToStr(#[from] http::header::ToStrError),
     #[error(transparent)]
     ParseInt(#[from] std::num::ParseIntError),
+    #[error(transparent)]
+    Resolver(#[from] ResolverError),
 }
 
 impl IntoResponse for EndpointError {
@@ -82,6 +90,10 @@ impl IntoResponse for EndpointError {
             EndpointError::JsonError(error) => {
                 (StatusCode::INTERNAL_SERVER_ERROR, error.to_string())
             }
+            EndpointError::Resolver(resolver_error) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                resolver_error.to_string(),
+            ),
         };
 
         tuple.into_response()
