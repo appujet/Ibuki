@@ -1,3 +1,4 @@
+use crate::util::converter::numbers::IbukiUserId;
 use crate::util::errors::EndpointError;
 use crate::ws::client::{
     WebsocketRequestData, handle_websocket_upgrade_error, handle_websocket_upgrade_request,
@@ -32,10 +33,7 @@ pub async fn ws(
 
     let request = WebsocketRequestData {
         user_agent: user_agent.into(),
-        user_id: UserId(
-            NonZeroU64::new(user_id)
-                .ok_or(EndpointError::UnprocessableEntity("Can't convert UserId"))?,
-        ),
+        user_id: UserId::from(NonZeroU64::try_from(IbukiUserId(user_id))?),
         session_id: headers
             .get("Session-Id")
             .and_then(|data| data.to_str().map_or(None, |data| data.parse::<u128>().ok())),

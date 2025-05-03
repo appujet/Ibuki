@@ -4,6 +4,12 @@ use axum::response::{IntoResponse, Response};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
+pub enum ConverterError {
+    #[error("Tried to convert {0} to NonZero64 but failed")]
+    NonZeroU64(u64),
+}
+
+#[derive(Error, Debug)]
 pub enum ResolverError {
     #[error("Important Data Missing: {0}")]
     MissingRequiredData(&'static str),
@@ -41,6 +47,8 @@ pub enum Base64EncodeError {
 
 #[derive(Error, Debug)]
 pub enum EndpointError {
+    #[error("Not found")]
+    NotFound,
     #[error("Required option {0} missing in headers")]
     MissingOption(&'static str),
     #[error("Unprocessable Entity due to: {0}")]
@@ -57,6 +65,10 @@ pub enum EndpointError {
     ParseInt(#[from] std::num::ParseIntError),
     #[error(transparent)]
     Resolver(#[from] ResolverError),
+    #[error(transparent)]
+    Converter(#[from] ConverterError),
+    #[error(transparent)]
+    PlayerManager(#[from] PlayerManagerError),
 }
 
 impl IntoResponse for EndpointError {
@@ -93,6 +105,15 @@ impl IntoResponse for EndpointError {
             EndpointError::Resolver(resolver_error) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 resolver_error.to_string(),
+            ),
+            EndpointError::NotFound => (StatusCode::NOT_FOUND, self.to_string()),
+            EndpointError::Converter(converter_error) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                converter_error.to_string(),
+            ),
+            EndpointError::PlayerManager(player_manager_error) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                player_manager_error.to_string(),
             ),
         };
 

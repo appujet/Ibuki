@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use axum::{
     body::Body,
     extract::{Path, Request},
@@ -7,12 +9,19 @@ use axum::{
 
 use crate::{constants::VERSION, util::errors::EndpointError};
 
+// todo: improve this in future
+
 pub async fn check(
-    Path(version): Path<u8>,
+    Path(params): Path<HashMap<String, String>>,
     request: Request,
     next: Next,
 ) -> Result<Response<Body>, EndpointError> {
-    if version != VERSION {
+    if params
+        .get("version")
+        .ok_or(EndpointError::UnprocessableEntity("Unsupported version"))?
+        .as_str()
+        != VERSION.to_string().as_str()
+    {
         return Err(EndpointError::UnprocessableEntity("Unsupported version"));
     }
 

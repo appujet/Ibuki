@@ -1,26 +1,40 @@
 use std::time::Duration;
 
-use async_trait::async_trait;
 use reqwest::Client;
-use songbird::input::{AudioStream, AuxMetadata};
-use symphonia::core::io::MediaSource;
+use songbird::input::{AuxMetadata, Input};
 
-use crate::models::TrackInfo;
+use crate::{models::TrackInfo, source::http::Http};
 
 use super::errors::ResolverError;
 
-#[async_trait]
+pub struct SourceManager {
+    pub http: Http,
+}
+
+impl SourceManager {
+    pub fn new() -> Self {
+        Self {
+            http: Http::new(None),
+        }
+    }
+}
+
+impl Default for SourceManager {
+    fn default() -> Self {
+        SourceManager::new()
+    }
+}
+
 pub trait Source {
+    fn new(client: Option<Client>) -> Self;
+
     fn valid(&self, url: String) -> bool;
 
     fn get_client(&self) -> Client;
 
     async fn resolve(&self, url: String) -> Result<TrackInfo, ResolverError>;
 
-    async fn stream(
-        &self,
-        track: &TrackInfo,
-    ) -> Result<AudioStream<Box<dyn MediaSource>>, ResolverError>;
+    fn stream(&self, track: &TrackInfo) -> Result<Input, ResolverError>;
 }
 
 impl From<AuxMetadata> for TrackInfo {
@@ -32,8 +46,8 @@ impl From<AuxMetadata> for TrackInfo {
 
         let is_seekable = metadata.duration.is_some();
         let author = metadata.artist.unwrap_or(String::from("Unknown"));
-        let length = metadata.duration.unwrap_or(Duration::from_secs(0));
-        let is_stream = metadata.duration.is_none();
+        let length = metadata.duration.unwrap_or(Duration::from_millis(u64::MAX));
+        let is_stream = length.as_millis() == Duration::from_millis(u64::MAX).as_millis();
         let title = metadata.title.unwrap_or(String::from("Unknown"));
 
         TrackInfo {

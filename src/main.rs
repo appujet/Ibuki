@@ -9,7 +9,6 @@ use dashmap::DashMap;
 use dotenv::dotenv;
 use models::{Cpu, LavalinkMessage, Memory, Stats};
 use songbird::id::UserId;
-use source::SourceManager;
 use std::sync::LazyLock;
 use std::{env::set_var, net::SocketAddr};
 use tokio::{
@@ -20,6 +19,7 @@ use tokio::{
 use tower::ServiceBuilder;
 use tracing::Level;
 use tracing_subscriber::fmt;
+use util::source::SourceManager;
 
 mod constants;
 mod middlewares;

@@ -1,25 +1,204 @@
-use super::{DecodeQueryString, EncodeQueryString};
-use crate::Sources;
-use crate::models::{DataType, Track, TrackInfo};
+use std::num::NonZeroU64;
+
+use super::{DecodeQueryString, EncodeQueryString, PlayerMethodsPath};
+use crate::models::{
+    DataType, LavalinkFilters, LavalinkPlayer, LavalinkPlayerState, LavalinkVoice, PlayerOptions,
+    Track as IbukiTrack, TrackInfo,
+};
+use crate::util::converter::numbers::IbukiGuildId;
 use crate::util::errors::EndpointError;
 use crate::util::source::Source;
 use crate::util::{decoder::decode_base64, encoder::encode_base64};
+use crate::{Clients, Sources};
+use axum::Json;
+use axum::extract::Path;
 use axum::{body::Body, extract::Query, response::Response};
+use serde_json::Value;
+use songbird::ConnectionInfo;
+use songbird::id::GuildId;
+use songbird::tracks::Track;
 
 #[tracing::instrument]
-pub async fn get_player() {}
+pub async fn get_player(
+    Path(PlayerMethodsPath {
+        version,
+        session_id,
+        guild_id,
+    }): Path<PlayerMethodsPath>,
+) -> Result<Response<Body>, EndpointError> {
+    let client = Clients
+        .iter()
+        .find(|client| client.session_id == session_id)
+        .ok_or(EndpointError::NotFound)?;
+
+    let id = GuildId::from(NonZeroU64::try_from(IbukiGuildId(guild_id))?);
+
+    let _ = client
+        .player_manager
+        .get_handle(id)
+        .ok_or(EndpointError::NotFound)?;
+
+    let player = LavalinkPlayer {
+        guild_id: id.0.get(),
+        track: None,
+        volume: 1,
+        paused: false,
+        state: LavalinkPlayerState {
+            time: 0,
+            position: 0,
+            connected: true,
+            ping: None,
+        },
+        voice: LavalinkVoice {
+            token: "Placeholder".into(),
+            endpoint: "Placeholder".into(),
+            session_id: "Placeholder".into(),
+            connected: None,
+            ping: None,
+        },
+        filters: LavalinkFilters {
+            volume: None,
+            equalizer: None,
+            karaoke: None,
+            timescale: None,
+            tremolo: None,
+            vibrato: None,
+            rotation: None,
+            distortion: None,
+            channel_mix: None,
+            low_pass: None,
+            plugin_filters: None,
+        },
+    };
+
+    let string = serde_json::to_string_pretty(&player)?;
+
+    Ok(Response::new(Body::from(string)))
+}
 
 #[tracing::instrument]
-pub async fn update_player() {}
+pub async fn update_player(
+    Path(PlayerMethodsPath {
+        version,
+        session_id,
+        guild_id,
+    }): Path<PlayerMethodsPath>,
+    Json(update_player): Json<PlayerOptions>,
+) -> Result<Response<Body>, EndpointError> {
+    let client = Clients
+        .iter()
+        .find(|client| client.session_id == session_id)
+        .ok_or(EndpointError::NotFound)?;
+
+    let id = GuildId::from(NonZeroU64::try_from(IbukiGuildId(guild_id))?);
+
+    if client.player_manager.get_connection(id).is_none() && update_player.voice.is_none() {
+        return Err(EndpointError::NotFound);
+    }
+
+    if let Some(update_voice) = update_player.voice {
+        let connection = ConnectionInfo {
+            channel_id: None,
+            endpoint: update_voice.endpoint,
+            guild_id: id,
+            session_id: update_voice.session_id,
+            token: update_voice.token,
+            user_id: client.user_id,
+        };
+
+        client
+            .player_manager
+            .create_connection(id, connection, None)
+            .await?;
+    }
+
+    if let Some(Some(encoded)) = update_player.track.map(|track| track.encoded) {
+        match encoded {
+            Value::Null => {
+                if let Some(handle) = client.player_manager.get_handle(id) {
+                    handle.stop().ok();
+                }
+            }
+            Value::String(encoded) => {
+                let track_info = decode_base64(&encoded)?;
+
+                let input = if track_info.source_name == "http" {
+                    Sources.http.stream(&track_info)?
+                } else {
+                    return Err(EndpointError::NotFound);
+                };
+
+                let track = Track::new(input);
+
+                client.player_manager.create_handle(id, track).await?;
+            }
+            _ => {}
+        }
+    }
+
+    let player = LavalinkPlayer {
+        guild_id: id.0.get(),
+        track: None,
+        volume: 1,
+        paused: false,
+        state: LavalinkPlayerState {
+            time: 0,
+            position: 0,
+            connected: true,
+            ping: None,
+        },
+        voice: LavalinkVoice {
+            token: "Placeholder".into(),
+            endpoint: "Placeholder".into(),
+            session_id: "Placeholder".into(),
+            connected: None,
+            ping: None,
+        },
+        filters: LavalinkFilters {
+            volume: None,
+            equalizer: None,
+            karaoke: None,
+            timescale: None,
+            tremolo: None,
+            vibrato: None,
+            rotation: None,
+            distortion: None,
+            channel_mix: None,
+            low_pass: None,
+            plugin_filters: None,
+        },
+    };
+
+    let string = serde_json::to_string_pretty(&player)?;
+
+    Ok(Response::new(Body::from(string)))
+}
 
 #[tracing::instrument]
-pub async fn destroy_player() {}
+pub async fn destroy_player(
+    Path(PlayerMethodsPath {
+        version,
+        session_id,
+        guild_id,
+    }): Path<PlayerMethodsPath>,
+) -> Result<Response<Body>, EndpointError> {
+    let client = Clients
+        .iter()
+        .find(|client| client.session_id == session_id)
+        .ok_or(EndpointError::NotFound)?;
+
+    let id = GuildId::from(NonZeroU64::try_from(IbukiGuildId(guild_id))?);
+
+    client.player_manager.delete_connection(id);
+
+    Ok(Response::new(Body::from(())))
+}
 
 #[tracing::instrument]
 pub async fn decode(query: Query<DecodeQueryString>) -> Result<Response<Body>, EndpointError> {
     let track = decode_base64(&query.track)?;
 
-    let track = Track {
+    let track = IbukiTrack {
         encoded: query.track.clone(),
         info: track,
         plugin_info: serde_json::Value::Null,
@@ -27,7 +206,6 @@ pub async fn decode(query: Query<DecodeQueryString>) -> Result<Response<Body>, E
 
     let string = serde_json::to_string_pretty(&track)?;
 
-    // dummy response
     Ok(Response::new(Body::from(string)))
 }
 
@@ -51,7 +229,7 @@ pub async fn encode(query: Query<EncodeQueryString>) -> Result<Response<Body>, E
     };
 
     let encoded = encode_base64(&track)?;
-    let track = Track {
+    let track = IbukiTrack {
         encoded,
         info: track,
         plugin_info: serde_json::Value::Null,
