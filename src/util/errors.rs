@@ -30,7 +30,7 @@ pub enum Base64EncodeError {
     #[error(transparent)]
     Io(#[from] std::io::Error),
     #[error("Unknown version detected. Got {0}")]
-    UnknownVersion(u32),
+    UnknownVersion(u8),
 }
 
 #[derive(Error, Debug)]

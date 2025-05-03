@@ -191,17 +191,17 @@ pub struct LavalinkPlayer {
 #[derive(Serialize, Debug)]
 pub struct RawTrackInfo {
     pub flags: u32,
-    pub source: String,
-    pub identifier: String,
+    pub version: u8,
+    pub title: String,
     pub author: String,
     pub length: u64,
+    pub identifier: String,
     pub is_stream: bool,
-    pub position: u64,
-    pub title: String,
     pub uri: Option<String>,
     pub artwork_url: Option<String>,
     pub isrc: Option<String>,
-    pub version: u32,
+    pub source: String,
+    pub position: u64,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

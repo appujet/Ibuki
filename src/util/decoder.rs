@@ -26,88 +26,11 @@ fn optional_read_string(rdr: &mut Cursor<Vec<u8>>) -> Result<Option<String>, Bas
     }
 }
 
-fn parse_v1(mut rdr: Cursor<Vec<u8>>, flags: u32) -> Result<RawTrackInfo, Base64DecodeError> {
-    let title = read_string(&mut rdr)?;
-    let author = read_string(&mut rdr)?;
-    let length = rdr.read_u64::<BigEndian>()?;
-    let identifier = read_string(&mut rdr)?;
-    let is_stream = rdr.read_u8()? != 0;
-    let source = read_string(&mut rdr)?;
-    let position = rdr.read_u64::<BigEndian>()?;
-
-    Ok(RawTrackInfo {
-        flags,
-        source,
-        identifier,
-        author,
-        length,
-        is_stream,
-        position,
-        title,
-        uri: None,
-        artwork_url: None,
-        isrc: None,
-        version: 1,
-    })
-}
-
-fn parse_v2(mut rdr: Cursor<Vec<u8>>, flags: u32) -> Result<RawTrackInfo, Base64DecodeError> {
-    let title = read_string(&mut rdr)?;
-    let author = read_string(&mut rdr)?;
-    let length = rdr.read_u64::<BigEndian>()?;
-    let identifier = read_string(&mut rdr)?;
-    let is_stream = rdr.read_u8()? != 0;
-    let uri = optional_read_string(&mut rdr)?;
-    let source = read_string(&mut rdr)?;
-    let position = rdr.read_u64::<BigEndian>()?;
-
-    Ok(RawTrackInfo {
-        flags,
-        source,
-        identifier,
-        author,
-        length,
-        is_stream,
-        position,
-        title,
-        uri,
-        artwork_url: None,
-        isrc: None,
-        version: 2,
-    })
-}
-
-fn parse_v3(mut rdr: Cursor<Vec<u8>>, flags: u32) -> Result<RawTrackInfo, Base64DecodeError> {
-    let title = read_string(&mut rdr)?;
-    let author = read_string(&mut rdr)?;
-    let length = rdr.read_u64::<BigEndian>()?;
-    let identifier = read_string(&mut rdr)?;
-    let is_stream = rdr.read_u8()? != 0;
-    let uri = optional_read_string(&mut rdr)?;
-    let artwork_url = optional_read_string(&mut rdr)?;
-    let isrc = optional_read_string(&mut rdr)?;
-    let source = read_string(&mut rdr)?;
-    let position = rdr.read_u64::<BigEndian>()?;
-
-    Ok(RawTrackInfo {
-        flags,
-        source,
-        identifier,
-        author,
-        length,
-        is_stream,
-        position,
-        title,
-        uri,
-        artwork_url,
-        isrc,
-        version: 3,
-    })
-}
-
 pub fn decode_base64(encoded: &String) -> Result<RawTrackInfo, Base64DecodeError> {
     let decoded = BASE64_STANDARD.decode(encoded)?;
+
     let mut rdr = Cursor::new(decoded);
+
     let value = rdr.read_u32::<BigEndian>()?;
     let flags = (value & 0xC0000000) >> 30;
 
@@ -117,10 +40,36 @@ pub fn decode_base64(encoded: &String) -> Result<RawTrackInfo, Base64DecodeError
         1
     };
 
-    match version {
-        1 => Ok(parse_v1(rdr, flags)?),
-        2 => Ok(parse_v2(rdr, flags)?),
-        3 => Ok(parse_v3(rdr, flags)?),
-        _ => Err(Base64DecodeError::UnknownVersion(version)),
+    if version > 3 || version == 0 {
+        return Err(Base64DecodeError::UnknownVersion(version));
     }
+
+    let title = read_string(&mut rdr)?;
+    let author = read_string(&mut rdr)?;
+    let length = rdr.read_u64::<BigEndian>()?;
+    let identifier = read_string(&mut rdr)?;
+    let is_stream = rdr.read_u8()? != 0;
+
+    let uri = optional_read_string(&mut rdr)?;
+    let artwork_url = optional_read_string(&mut rdr)?;
+    let isrc = optional_read_string(&mut rdr)?;
+
+    let source = read_string(&mut rdr)?;
+
+    let position = rdr.read_u64::<BigEndian>()?;
+
+    Ok(RawTrackInfo {
+        flags,
+        version,
+        title,
+        author,
+        length,
+        identifier,
+        is_stream,
+        uri,
+        artwork_url,
+        isrc,
+        source,
+        position,
+    })
 }
