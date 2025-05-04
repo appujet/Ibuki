@@ -34,7 +34,7 @@ pub trait Source {
 
     async fn resolve(&self, url: String) -> Result<TrackInfo, ResolverError>;
 
-    fn stream(&self, track: &TrackInfo) -> Result<Input, ResolverError>;
+    async fn stream(&self, track: &TrackInfo) -> Result<Input, ResolverError>;
 }
 
 impl From<AuxMetadata> for TrackInfo {

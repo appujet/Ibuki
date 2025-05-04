@@ -14,7 +14,6 @@ use axum::Json;
 use axum::extract::Path;
 use axum::{body::Body, extract::Query, response::Response};
 use serde_json::Value;
-use songbird::ConnectionInfo;
 use songbird::id::GuildId;
 use songbird::tracks::Track;
 
@@ -97,18 +96,9 @@ pub async fn update_player(
     }
 
     if let Some(update_voice) = update_player.voice {
-        let connection = ConnectionInfo {
-            channel_id: None,
-            endpoint: update_voice.endpoint,
-            guild_id: id,
-            session_id: update_voice.session_id,
-            token: update_voice.token,
-            user_id: client.user_id,
-        };
-
         client
             .player_manager
-            .create_connection(id, connection, None)
+            .create_connection(id, update_voice, None)
             .await?;
     }
 
@@ -123,7 +113,7 @@ pub async fn update_player(
                 let track_info = decode_base64(&encoded)?;
 
                 let input = if track_info.source_name == "http" {
-                    Sources.http.stream(&track_info)?
+                    Sources.http.stream(&track_info).await?
                 } else {
                     return Err(EndpointError::NotFound);
                 };

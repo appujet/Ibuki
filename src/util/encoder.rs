@@ -29,9 +29,9 @@ fn optional_write_string(
  * Unfortunately this isnt cross compatible with lavalink for some reason
  */
 pub fn encode_base64(track_info: &TrackInfo) -> Result<String, Base64EncodeError> {
-    let flags = 0;
-
     let mut wtr = Cursor::new(Vec::new());
+
+    let flags = 1;
 
     wtr.write_u32::<BigEndian>(((flags & 0x3) << 30) | TRACK_INFO_VERSIONED)?;
 

@@ -1,7 +1,9 @@
+use crate::models::LavalinkVoice;
 use crate::util::errors::PlayerManagerError;
 
 use super::events::ManagerEvent;
 use dashmap::DashMap;
+use dashmap::mapref::one::Ref;
 use songbird::id::{GuildId, UserId};
 use songbird::tracks::{Track, TrackHandle};
 use songbird::{Config, ConnectionInfo, CoreEvent, Driver, Event, TrackEvent};
@@ -31,16 +33,16 @@ impl PlayerManager {
         self.handles.len()
     }
 
-    pub fn get_connection(&self, guild_id: GuildId) -> Option<Driver> {
-        self.connections.get(&guild_id).map(|data| data.clone())
+    pub fn get_connection(&self, guild_id: GuildId) -> Option<Ref<'_, GuildId, Driver>> {
+        self.connections.get(&guild_id)
     }
 
     pub async fn create_connection(
         &self,
         guild_id: GuildId,
-        connection: ConnectionInfo,
+        server_update: LavalinkVoice,
         config: Option<Config>,
-    ) -> Result<Driver, PlayerManagerError> {
+    ) -> Result<Ref<'_, GuildId, Driver>, PlayerManagerError> {
         let Some(driver) = self.connections.get(&guild_id) else {
             let config_or_default = config.unwrap_or_default();
 
@@ -55,31 +57,43 @@ impl PlayerManager {
                 },
             );
 
-            driver.connect(connection.clone()).await?;
+            let connection = ConnectionInfo {
+                channel_id: None,
+                endpoint: server_update.endpoint.to_owned(),
+                guild_id,
+                session_id: server_update.session_id.to_owned(),
+                token: server_update.token.to_owned(),
+                user_id: self.user_id,
+            };
+
+            driver.connect(connection).await?;
 
             self.connections.insert(guild_id, driver);
 
-            return Box::pin(self.create_connection(guild_id, connection, Some(config_or_default)))
-                .await;
+            return Box::pin(self.create_connection(
+                guild_id,
+                server_update,
+                Some(config_or_default),
+            ))
+            .await;
         };
 
-        Ok(driver.clone())
+        Ok(driver)
     }
 
     pub fn delete_connection(&self, guild_id: GuildId) {
-        let Some(mut driver) = self.connections.get_mut(&guild_id) else {
+        let Some((_, mut connection)) = self.connections.remove(&guild_id) else {
             return;
         };
 
-        driver.leave();
-        driver.remove_all_global_events();
+        connection.leave();
+        connection.remove_all_global_events();
 
-        self.connections.remove(&guild_id);
         self.handles.remove(&guild_id);
     }
 
-    pub fn get_handle(&self, guild_id: GuildId) -> Option<TrackHandle> {
-        self.handles.get(&guild_id).map(|data| data.clone())
+    pub fn get_handle(&self, guild_id: GuildId) -> Option<Ref<'_, GuildId, TrackHandle>> {
+        self.handles.get(&guild_id)
     }
 
     pub async fn create_handle(

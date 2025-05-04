@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use reqwest::{Client, Url};
-use songbird::input::{AuxMetadata, Compose, HttpRequest, Input};
+use songbird::input::{AuxMetadata, Compose, HttpRequest, Input, LiveInput};
 
 use crate::{
     models::TrackInfo,
@@ -42,8 +42,8 @@ impl Source for Http {
         Ok(metadata.into())
     }
 
-    fn stream(&self, track: &TrackInfo) -> Result<Input, ResolverError> {
-        let request = HttpRequest::new(
+    async fn stream(&self, track: &TrackInfo) -> Result<Input, ResolverError> {
+        let mut request = HttpRequest::new(
             self.get_client(),
             track
                 .uri
@@ -51,6 +51,10 @@ impl Source for Http {
                 .ok_or(ResolverError::MissingRequiredData("uri"))?,
         );
 
-        Ok(Input::from(request))
+        let stream = request.create_async().await?;
+        let input = Input::Live(LiveInput::Raw(stream), None);
+
+
+        Ok(input)
     }
 }
