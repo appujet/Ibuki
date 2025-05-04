@@ -156,7 +156,15 @@ impl WebsocketClient {
                     break;
                 }
 
-                sender.send(message).await.ok();
+                if let Err(error) = sender.send(message.clone()).await {
+                    tracing::warn!("Failed send to websocket client. Error: {}", error);
+                    continue;
+                }
+
+                tracing::info!(
+                    "Sent [{}] to websocket client",
+                    message.to_text().unwrap_or("Unknown")
+                );
             }
 
             tracing::info!("Websocket connection sender is stopped");

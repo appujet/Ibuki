@@ -1,4 +1,4 @@
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
 
 //
@@ -7,13 +7,20 @@ use serde_json::Value;
 
 fn str_to_u64<'de, T, D>(de: D) -> Result<T, D::Error>
 where
-    D: serde::Deserializer<'de>,
+    D: Deserializer<'de>,
     T: std::str::FromStr,
     <T as std::str::FromStr>::Err: std::fmt::Display,
 {
     String::deserialize(de)?
         .parse()
         .map_err(serde::de::Error::custom)
+}
+
+fn u64_to_str<S>(num: &u64, se: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    se.serialize_str(num.to_string().as_str())
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -178,7 +185,7 @@ pub struct LavalinkPlayerState {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LavalinkPlayer {
-    #[serde(deserialize_with = "str_to_u64")]
+    #[serde(deserialize_with = "str_to_u64", serialize_with = "u64_to_str")]
     pub guild_id: u64,
     pub track: Option<Track>,
     pub volume: u32,
@@ -214,7 +221,7 @@ pub struct Track {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Exception {
-    #[serde(deserialize_with = "str_to_u64")]
+    #[serde(deserialize_with = "str_to_u64", serialize_with = "u64_to_str")]
     pub guild_id: u64,
     pub message: Option<String>,
     pub severity: String,
@@ -224,7 +231,7 @@ pub struct Exception {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TrackStart {
-    #[serde(deserialize_with = "str_to_u64")]
+    #[serde(deserialize_with = "str_to_u64", serialize_with = "u64_to_str")]
     pub guild_id: u64,
     pub track: Track,
 }
@@ -232,7 +239,7 @@ pub struct TrackStart {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TrackEnd {
-    #[serde(deserialize_with = "str_to_u64")]
+    #[serde(deserialize_with = "str_to_u64", serialize_with = "u64_to_str")]
     pub guild_id: u64,
     pub track: Track,
     pub reason: String,
@@ -241,7 +248,7 @@ pub struct TrackEnd {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TrackException {
-    #[serde(deserialize_with = "str_to_u64")]
+    #[serde(deserialize_with = "str_to_u64", serialize_with = "u64_to_str")]
     pub guild_id: u64,
     pub track: Track,
     pub exception: Exception,
@@ -250,7 +257,7 @@ pub struct TrackException {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TrackStuck {
-    #[serde(deserialize_with = "str_to_u64")]
+    #[serde(deserialize_with = "str_to_u64", serialize_with = "u64_to_str")]
     pub guild_id: u64,
     pub track: Track,
     pub threshold_ms: usize,
@@ -259,7 +266,7 @@ pub struct TrackStuck {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WebSocketClosed {
-    #[serde(deserialize_with = "str_to_u64")]
+    #[serde(deserialize_with = "str_to_u64", serialize_with = "u64_to_str")]
     pub guild_id: u64,
     pub code: usize,
     pub reason: String,
@@ -342,6 +349,7 @@ pub struct Ready {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayerUpdate {
+    #[serde(deserialize_with = "str_to_u64", serialize_with = "u64_to_str")]
     pub guild_id: u64,
     pub state: LavalinkPlayerState,
 }
