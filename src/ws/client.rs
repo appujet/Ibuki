@@ -83,12 +83,12 @@ impl WebsocketClient {
         } else {
             let _ = self.message_receiver.drain();
 
-            self.player_manager.destroy();
+            self.player_manager.destroy().await;
 
             self.session_id = Uuid::new_v4().as_u128();
 
             tracing::info!(
-                "Websocket Connection with [SessionId: {}] re-identified! [Dropped Messages: {}]",
+                "Websocket Connection with [SessionId: {}] identified! [Dropped Messages: {}]",
                 self.session_id,
                 queue_length
             );
@@ -131,10 +131,10 @@ impl WebsocketClient {
 
             sleep(duration).await;
 
-            let connections = manager.get_connection_len();
-            let players = manager.get_player_len();
+            let connections = manager.get_players_len();
+            let players = manager.get_active_players_len();
 
-            manager.destroy();
+            manager.destroy().await;
 
             Clients.remove(&user_id);
 
@@ -215,13 +215,13 @@ impl WebsocketClient {
     /**
      * Disconnects without close code and clears the voice connections
      */
-    pub fn destroy(&mut self) {
+    pub async fn destroy(&mut self) {
         self.handles.retain(|handle| {
             handle.abort();
             false
         });
 
-        self.player_manager.destroy();
+        self.player_manager.destroy().await;
     }
 }
 

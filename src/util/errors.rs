@@ -20,11 +20,31 @@ pub enum ResolverError {
 #[derive(Error, Debug)]
 pub enum PlayerManagerError {
     #[error(transparent)]
+    Player(#[from] PlayerError),
+    #[error(transparent)]
     Connection(#[from] songbird::error::ConnectionError),
     #[error(transparent)]
     Control(#[from] songbird::error::ControlError),
     #[error("A connection is required to execute this action")]
     MissingConnection,
+}
+
+#[derive(Error, Debug)]
+pub enum PlayerError {
+    #[error("A driver is required to execute this action")]
+    MissingDriver,
+    #[error("A connection is required to execute this action")]
+    MissingConnection,
+    #[error("The track provided is not supported")]
+    InputNotSupported,
+    #[error(transparent)]
+    Base64Decode(#[from] Base64DecodeError),
+    #[error(transparent)]
+    Connection(#[from] songbird::error::ConnectionError),
+    #[error(transparent)]
+    Resolver(#[from] ResolverError),
+    #[error(transparent)]
+    Control(#[from] songbird::error::ControlError),
 }
 
 #[derive(Error, Debug)]
@@ -69,6 +89,8 @@ pub enum EndpointError {
     Converter(#[from] ConverterError),
     #[error(transparent)]
     PlayerManager(#[from] PlayerManagerError),
+    #[error(transparent)]
+    PlayerError(#[from] PlayerError),
 }
 
 impl IntoResponse for EndpointError {
@@ -115,6 +137,9 @@ impl IntoResponse for EndpointError {
                 StatusCode::INTERNAL_SERVER_ERROR,
                 player_manager_error.to_string(),
             ),
+            EndpointError::PlayerError(player_error) => {
+                (StatusCode::INTERNAL_SERVER_ERROR, player_error.to_string())
+            }
         };
 
         tuple.into_response()

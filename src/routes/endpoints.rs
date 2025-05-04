@@ -15,7 +15,6 @@ use axum::extract::Path;
 use axum::{body::Body, extract::Query, response::Response};
 use serde_json::Value;
 use songbird::id::GuildId;
-use songbird::tracks::Track;
 
 #[tracing::instrument]
 pub async fn get_player(
@@ -34,7 +33,7 @@ pub async fn get_player(
 
     let _ = client
         .player_manager
-        .get_handle(id)
+        .get_player(id)
         .ok_or(EndpointError::NotFound)?;
 
     let player = LavalinkPlayer {
@@ -91,36 +90,29 @@ pub async fn update_player(
 
     let id = GuildId::from(NonZeroU64::try_from(IbukiGuildId(guild_id))?);
 
-    if client.player_manager.get_connection(id).is_none() && update_player.voice.is_none() {
+    if client.player_manager.get_player(id).is_none() && update_player.voice.is_none() {
         return Err(EndpointError::NotFound);
     }
 
     if let Some(update_voice) = update_player.voice {
         client
             .player_manager
-            .create_connection(id, update_voice, None)
+            .create_player(id, update_voice, None, None)
             .await?;
     }
+
+    let player = client
+        .player_manager
+        .get_player(id)
+        .ok_or(EndpointError::NotFound)?;
 
     if let Some(Some(encoded)) = update_player.track.map(|track| track.encoded) {
         match encoded {
             Value::Null => {
-                if let Some(handle) = client.player_manager.get_handle(id) {
-                    handle.stop().ok();
-                }
+                player.stop().await;
             }
             Value::String(encoded) => {
-                let track_info = decode_base64(&encoded)?;
-
-                let input = if track_info.source_name == "http" {
-                    Sources.http.stream(&track_info).await?
-                } else {
-                    return Err(EndpointError::NotFound);
-                };
-
-                let track = Track::new(input);
-
-                client.player_manager.create_handle(id, track).await?;
+                player.play(encoded).await?;
             }
             _ => {}
         }
@@ -179,7 +171,7 @@ pub async fn destroy_player(
 
     let id = GuildId::from(NonZeroU64::try_from(IbukiGuildId(guild_id))?);
 
-    client.player_manager.delete_connection(id);
+    client.player_manager.destroy_player(id).await;
 
     Ok(Response::new(Body::from(())))
 }

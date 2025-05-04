@@ -1,3 +1,5 @@
+#![recursion_limit = "256"]
+
 use crate::ws::client::WebsocketClient;
 use axum::{
     Router,

@@ -39,6 +39,8 @@ pub async fn ws(
             .and_then(|data| data.to_str().map_or(None, |data| data.parse::<u128>().ok())),
     };
 
+    tracing::info!("Received a connection request from {}({})", user_id, user_agent);
+
     // now stop complaining compiler
     let on_error_request = request.clone();
     let on_upgrade_request = request.clone();
