@@ -2,8 +2,7 @@ use std::num::NonZeroU64;
 
 use super::{DecodeQueryString, EncodeQueryString, PlayerMethodsPath};
 use crate::models::{
-    DataType, LavalinkFilters, LavalinkPlayer, LavalinkPlayerState, LavalinkVoice, PlayerOptions,
-    Track as IbukiTrack, TrackInfo,
+    DataType, Player, PlayerOptions, PlayerState, Track as IbukiTrack, TrackInfo, VoiceData,
 };
 use crate::util::converter::numbers::IbukiGuildId;
 use crate::util::errors::EndpointError;
@@ -36,37 +35,25 @@ pub async fn get_player(
         .get_player(id)
         .ok_or(EndpointError::NotFound)?;
 
-    let player = LavalinkPlayer {
+    let player = Player {
         guild_id: id.0.get(),
         track: None,
         volume: 1,
         paused: false,
-        state: LavalinkPlayerState {
+        state: PlayerState {
             time: 0,
             position: 0,
             connected: true,
             ping: None,
         },
-        voice: LavalinkVoice {
+        voice: VoiceData {
             token: "Placeholder".into(),
             endpoint: "Placeholder".into(),
             session_id: "Placeholder".into(),
             connected: None,
             ping: None,
         },
-        filters: LavalinkFilters {
-            volume: None,
-            equalizer: None,
-            karaoke: None,
-            timescale: None,
-            tremolo: None,
-            vibrato: None,
-            rotation: None,
-            distortion: None,
-            channel_mix: None,
-            low_pass: None,
-            plugin_filters: None,
-        },
+        filters: Value::Object(serde_json::Map::new()),
     };
 
     let string = serde_json::to_string_pretty(&player)?;
@@ -118,37 +105,25 @@ pub async fn update_player(
         }
     }
 
-    let player = LavalinkPlayer {
+    let player = Player {
         guild_id: id.0.get(),
         track: None,
         volume: 1,
         paused: false,
-        state: LavalinkPlayerState {
+        state: PlayerState {
             time: 0,
             position: 0,
             connected: true,
             ping: None,
         },
-        voice: LavalinkVoice {
+        voice: VoiceData {
             token: "Placeholder".into(),
             endpoint: "Placeholder".into(),
             session_id: "Placeholder".into(),
             connected: None,
             ping: None,
         },
-        filters: LavalinkFilters {
-            volume: None,
-            equalizer: None,
-            karaoke: None,
-            timescale: None,
-            tremolo: None,
-            vibrato: None,
-            rotation: None,
-            distortion: None,
-            channel_mix: None,
-            low_pass: None,
-            plugin_filters: None,
-        },
+        filters: Value::Object(serde_json::Map::new()),
     };
 
     let string = serde_json::to_string_pretty(&player)?;

@@ -1,5 +1,5 @@
 use crate::Clients;
-use crate::models::{LavalinkMessage, Ready};
+use crate::models::{NodeMessage, Ready};
 use crate::voice::manager::PlayerManager;
 use axum::Error;
 use axum::body::Bytes;
@@ -178,7 +178,7 @@ impl WebsocketClient {
         };
 
         // Normally, this should never happen, but we ignore it if it does happen and log it
-        let Ok(serialized) = serde_json::to_string(&LavalinkMessage::Ready(event)) else {
+        let Ok(serialized) = serde_json::to_string(&NodeMessage::Ready(event)) else {
             tracing::warn!("Failed to encode ready op, this should not happen usually");
             return Ok(resumed);
         };

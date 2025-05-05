@@ -1,5 +1,5 @@
 use crate::models::{
-    Exception, LavalinkMessage, LavalinkPlayerState, PlayerEvents, PlayerUpdate, Track, TrackEnd,
+    Exception, NodeMessage, PlayerEvents, PlayerState, PlayerUpdate, Track, TrackEnd,
     TrackException, TrackInfo, TrackStart, TrackStuck, WebSocketClosed,
 };
 
@@ -27,7 +27,7 @@ impl EventHandler for PlayerEvent {
                 Event::Periodic(_, _) => {
                     let event = PlayerUpdate {
                         guild_id: player.guild_id.0.get(),
-                        state: LavalinkPlayerState {
+                        state: PlayerState {
                             time: 0,
                             position: 0,
                             connected: true,
@@ -35,8 +35,7 @@ impl EventHandler for PlayerEvent {
                         },
                     };
 
-                    let Ok(serialized) =
-                        serde_json::to_string(&LavalinkMessage::PlayerUpdate(event))
+                    let Ok(serialized) = serde_json::to_string(&NodeMessage::PlayerUpdate(event))
                     else {
                         tracing::warn!(
                             "Serde player update encoding failed. [UserId: {}] [GuildId: {}] [Event: {}]",
@@ -74,7 +73,7 @@ impl EventHandler for PlayerEvent {
                         threshold_ms: duration.as_millis() as usize,
                     };
 
-                    let Ok(serialized) = serde_json::to_string(&LavalinkMessage::Event(
+                    let Ok(serialized) = serde_json::to_string(&NodeMessage::Event(
                         PlayerEvents::TrackStuckEvent(event),
                     )) else {
                         tracing::warn!(
@@ -118,7 +117,7 @@ impl EventHandler for PlayerEvent {
                             reason: "Placeholder".into(),
                         };
 
-                        let Ok(serialized) = serde_json::to_string(&LavalinkMessage::Event(
+                        let Ok(serialized) = serde_json::to_string(&NodeMessage::Event(
                             PlayerEvents::TrackEndEvent(event),
                         )) else {
                             tracing::warn!(
@@ -158,7 +157,7 @@ impl EventHandler for PlayerEvent {
                             },
                         };
 
-                        let Ok(serialized) = serde_json::to_string(&LavalinkMessage::Event(
+                        let Ok(serialized) = serde_json::to_string(&NodeMessage::Event(
                             PlayerEvents::TrackStartEvent(event),
                         )) else {
                             tracing::warn!(
@@ -204,7 +203,7 @@ impl EventHandler for PlayerEvent {
                             },
                         };
 
-                        let Ok(serialized) = serde_json::to_string(&LavalinkMessage::Event(
+                        let Ok(serialized) = serde_json::to_string(&NodeMessage::Event(
                             PlayerEvents::TrackExceptionEvent(event),
                         )) else {
                             tracing::warn!(
@@ -235,7 +234,7 @@ impl EventHandler for PlayerEvent {
                         by_remote: true,
                     };
 
-                    let Ok(serialized) = serde_json::to_string(&LavalinkMessage::Event(
+                    let Ok(serialized) = serde_json::to_string(&NodeMessage::Event(
                         PlayerEvents::WebSocketClosedEvent(event),
                     )) else {
                         tracing::warn!(

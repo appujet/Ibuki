@@ -9,7 +9,7 @@ use axum::{
 };
 use dashmap::DashMap;
 use dotenv::dotenv;
-use models::{Cpu, LavalinkMessage, Memory, Stats};
+use models::{Cpu, Memory, NodeMessage, Stats};
 use songbird::id::UserId;
 use std::sync::LazyLock;
 use std::{env::set_var, net::SocketAddr};
@@ -83,7 +83,7 @@ async fn main() {
                 frame_stats: None,
             };
 
-            let serialized = serde_json::to_string(&LavalinkMessage::Stats(stats.clone())).unwrap();
+            let serialized = serde_json::to_string(&NodeMessage::Stats(stats.clone())).unwrap();
 
             let set = Clients
                 .iter()

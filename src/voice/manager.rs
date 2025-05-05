@@ -1,4 +1,4 @@
-use crate::models::LavalinkVoice;
+use crate::models::VoiceData;
 use crate::util::errors::PlayerManagerError;
 
 use super::player::Player;
@@ -49,7 +49,7 @@ impl PlayerManager {
     pub async fn create_player(
         &self,
         guild_id: GuildId,
-        server_update: LavalinkVoice,
+        server_update: VoiceData,
         config: Option<Config>,
         exists: Option<()>,
     ) -> Result<Ref<'_, GuildId, Player>, PlayerManagerError> {

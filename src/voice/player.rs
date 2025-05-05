@@ -1,4 +1,4 @@
-use std::sync::{atomic::AtomicBool, Arc};
+use std::sync::{Arc, atomic::AtomicBool};
 
 use axum::extract::ws::Message;
 use songbird::{
@@ -12,7 +12,7 @@ use super::events::PlayerEvent;
 use crate::voice::manager::PlayerManager;
 use crate::{
     Clients, Sources,
-    models::{LavalinkVoice, TrackInfo},
+    models::{TrackInfo, VoiceData},
     util::{decoder::decode_base64, errors::PlayerError, source::Source},
 };
 
@@ -57,7 +57,7 @@ impl Player {
 
     pub async fn connect(
         &self,
-        server_update: &LavalinkVoice,
+        server_update: &VoiceData,
         config: Option<Config>,
     ) -> Result<(), PlayerError> {
         let connection = ConnectionInfo {

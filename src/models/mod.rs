@@ -74,97 +74,9 @@ pub struct TrackLoadException {
     pub cause: String,
 }
 
-#[derive(Default, Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct LavalinkFilters {
-    pub volume: Option<f64>,
-    pub equalizer: Option<Vec<Equalizer>>,
-    pub karaoke: Option<Karaoke>,
-    pub timescale: Option<Timescale>,
-    pub tremolo: Option<Tremolo>,
-    pub vibrato: Option<Vibrato>,
-    pub rotation: Option<Rotation>,
-    pub distortion: Option<Distortion>,
-    pub channel_mix: Option<ChannelMix>,
-    pub low_pass: Option<LowPass>,
-    pub plugin_filters: Option<Value>,
-}
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Tremolo {
-    pub frequency: Option<f64>,
-    pub depth: Option<f64>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Vibrato {
-    pub frequency: Option<f64>,
-    pub depth: Option<f64>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Timescale {
-    pub speed: Option<f64>,
-    pub pitch: Option<f64>,
-    pub rate: Option<f64>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Rotation {
-    pub rotation_hz: Option<f64>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct LowPass {
-    pub smoothing: Option<f64>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Karaoke {
-    pub level: Option<f64>,
-    pub mono_level: Option<f64>,
-    pub filter_band: Option<f64>,
-    pub filter_width: Option<f64>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Equalizer {
-    pub band: u16,
-    pub gain: f64,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Distortion {
-    pub sin_offset: Option<f64>,
-    pub sin_scale: Option<f64>,
-    pub cos_offset: Option<f64>,
-    pub cos_scale: Option<f64>,
-    pub tan_offset: Option<f64>,
-    pub tan_scale: Option<f64>,
-    pub offset: Option<f64>,
-    pub scale: Option<f64>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ChannelMix {
-    pub left_to_left: Option<f64>,
-    pub left_to_right: Option<f64>,
-    pub right_to_left: Option<f64>,
-    pub right_to_right: Option<f64>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct LavalinkVoice {
+pub struct VoiceData {
     pub token: String,
     pub endpoint: String,
     pub session_id: String,
@@ -175,7 +87,7 @@ pub struct LavalinkVoice {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct LavalinkPlayerState {
+pub struct PlayerState {
     pub time: u64,
     pub position: u32,
     pub connected: bool,
@@ -184,15 +96,15 @@ pub struct LavalinkPlayerState {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct LavalinkPlayer {
+pub struct Player {
     #[serde(deserialize_with = "str_to_u64", serialize_with = "u64_to_str")]
     pub guild_id: u64,
     pub track: Option<Track>,
     pub volume: u32,
     pub paused: bool,
-    pub state: LavalinkPlayerState,
-    pub voice: LavalinkVoice,
-    pub filters: LavalinkFilters,
+    pub state: PlayerState,
+    pub voice: VoiceData,
+    pub filters: Value,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -291,8 +203,6 @@ pub struct UpdatePlayerTrack {
     pub encoded: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub identifier: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub user_data: Option<Value>,
 }
 
 #[derive(Default, Clone, Debug, Serialize, Deserialize)]
@@ -311,9 +221,7 @@ pub struct PlayerOptions {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub paused: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub filters: Option<LavalinkFilters>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub voice: Option<LavalinkVoice>,
+    pub voice: Option<VoiceData>,
 }
 
 #[derive(Default, Clone, Debug, Serialize, Deserialize)]
@@ -351,7 +259,7 @@ pub struct Ready {
 pub struct PlayerUpdate {
     #[serde(deserialize_with = "str_to_u64", serialize_with = "u64_to_str")]
     pub guild_id: u64,
-    pub state: LavalinkPlayerState,
+    pub state: PlayerState,
 }
 
 #[derive(Default, Clone, Debug, Serialize, Deserialize)]
@@ -368,7 +276,7 @@ pub struct Stats {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "op")]
 #[serde(rename_all = "camelCase")]
-pub enum LavalinkMessage {
+pub enum NodeMessage {
     Ready(Ready),
     PlayerUpdate(PlayerUpdate),
     Stats(Stats),
@@ -380,78 +288,4 @@ pub enum LavalinkMessage {
 pub struct SessionInfo {
     resuming: bool,
     timeout: u32,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct FailingAddresses {
-    pub address: String,
-    pub failing_timestamp: u64,
-    pub failing_time: String,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct IpBlock {
-    #[serde(rename = "type")]
-    pub ip_type: String,
-    pub address: String,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RoutePlannerDetails {
-    pub ip_block: IpBlock,
-    pub failing_addresses: Vec<FailingAddresses>,
-    pub rotate_index: String,
-    pub ip_index: String,
-    pub current_address: String,
-    pub block_index: String,
-    pub current_address_index: String,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RoutePlanner {
-    pub class: Option<String>,
-    pub details: Option<RoutePlannerDetails>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct NodeVersion {
-    pub semver: String,
-    pub major: u64,
-    pub minor: u64,
-    pub patch: u64,
-    pub pre_release: Option<String>,
-    pub build: Option<String>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct NodeGit {
-    pub branch: String,
-    pub commit: String,
-    pub commit_time: u64,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct NodePlugin {
-    pub name: String,
-    pub version: String,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct LavalinkInfo {
-    pub version: NodeVersion,
-    pub build_time: u64,
-    pub git: NodeGit,
-    pub jvm: String,
-    pub lavaplayer: String,
-    pub source_managers: String,
-    pub filters: Vec<String>,
-    pub plugins: Vec<NodePlugin>,
 }
