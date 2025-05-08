@@ -25,6 +25,8 @@ pub enum PlayerManagerError {
     Connection(#[from] songbird::error::ConnectionError),
     #[error(transparent)]
     Control(#[from] songbird::error::ControlError),
+    #[error("Expected a player but got none")]
+    MissingPlayer,
     #[error("A connection is required to execute this action")]
     MissingConnection,
 }

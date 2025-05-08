@@ -36,8 +36,8 @@ pub struct WebsocketClient {
 impl WebsocketClient {
     pub fn new(user_id: UserId) -> Self {
         let session_id = Uuid::new_v4().as_u128();
-        let player_manager = Arc::new(PlayerManager::new(user_id));
         let (message_sender, message_receiver) = unbounded::<Message>();
+        let player_manager = Arc::new(PlayerManager::new(message_sender.downgrade(), user_id));
 
         Self {
             user_id,

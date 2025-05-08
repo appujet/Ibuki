@@ -84,7 +84,7 @@ pub async fn update_player(
     if let Some(update_voice) = update_player.voice {
         client
             .player_manager
-            .create_player(id, update_voice, None, None)
+            .create_player(id, update_voice, None)
             .await?;
     }
 
