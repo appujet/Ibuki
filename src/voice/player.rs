@@ -25,10 +25,10 @@ pub struct Player {
     pub guild_id: GuildId,
     pub active: Arc<AtomicBool>,
     pub data: Arc<Mutex<ApiPlayer>>,
-    websocket: WeakSender<Message>,
-    cleaner: WeakSender<CleanerSender>,
-    driver: Arc<Mutex<Driver>>,
-    handle: Arc<Mutex<Option<TrackHandle>>>,
+    pub websocket: WeakSender<Message>,
+    pub cleaner: WeakSender<CleanerSender>,
+    pub driver: Arc<Mutex<Driver>>,
+    pub handle: Arc<Mutex<Option<TrackHandle>>>,
 }
 
 impl Player {
@@ -88,18 +88,12 @@ impl Player {
 
         driver.add_global_event(
             Event::Core(CoreEvent::DriverDisconnect),
-            PlayerEvent {
-                player: player.clone(),
-                event_type: Event::Core(CoreEvent::DriverDisconnect),
-            },
+            PlayerEvent::new(Event::Core(CoreEvent::DriverDisconnect), &player),
         );
 
         driver.add_global_event(
             Event::Periodic(Duration::from_secs(10), None),
-            PlayerEvent {
-                player: player.clone(),
-                event_type: Event::Periodic(Duration::from_secs(10), None),
-            },
+            PlayerEvent::new(Event::Periodic(Duration::from_secs(10), None), &player),
         );
 
         drop(driver);
@@ -179,42 +173,27 @@ impl Player {
 
         track_handle.add_event(
             Event::Track(TrackEvent::Play),
-            PlayerEvent {
-                player: self.clone(),
-                event_type: Event::Track(TrackEvent::Play),
-            },
+            PlayerEvent::new(Event::Track(TrackEvent::Play), self),
         )?;
 
         track_handle.add_event(
             Event::Track(TrackEvent::Pause),
-            PlayerEvent {
-                player: self.clone(),
-                event_type: Event::Track(TrackEvent::Pause),
-            },
+            PlayerEvent::new(Event::Track(TrackEvent::Pause), self),
         )?;
 
         track_handle.add_event(
             Event::Track(TrackEvent::Playable),
-            PlayerEvent {
-                player: self.clone(),
-                event_type: Event::Track(TrackEvent::Playable),
-            },
+            PlayerEvent::new(Event::Track(TrackEvent::Playable), self),
         )?;
 
         track_handle.add_event(
             Event::Track(TrackEvent::End),
-            PlayerEvent {
-                player: self.clone(),
-                event_type: Event::Track(TrackEvent::End),
-            },
+            PlayerEvent::new(Event::Track(TrackEvent::End), self),
         )?;
 
         track_handle.add_event(
             Event::Track(TrackEvent::Error),
-            PlayerEvent {
-                player: self.clone(),
-                event_type: Event::Track(TrackEvent::Error),
-            },
+            PlayerEvent::new(Event::Track(TrackEvent::Error), self),
         )?;
 
         let mut handle = self.handle.lock().await;
@@ -230,39 +209,6 @@ impl Player {
         if let Some(handle) = handle.take() {
             handle.stop().ok();
         }
-    }
-
-    pub async fn remove_handle(&self) {
-        self.handle.lock().await.take();
-    }
-
-    pub async fn send_ws(&self, message: Message) {
-        let Some(sender) = self.websocket.upgrade() else {
-            tracing::warn!(
-                "Player with [GuildId: {}] [UserId: {}] tried to send on a websocket message on a websocket channel that don\'t exist",
-                self.guild_id,
-                self.user_id
-            );
-            return;
-        };
-
-        sender.send_async(message).await.ok();
-    }
-
-    pub async fn delete(&self) {
-        let Some(sender) = self.cleaner.upgrade() else {
-            tracing::warn!(
-                "Player with [GuildId: {}] [UserId: {}] tried to send a destroy message on cleaner channel that don\'t exist",
-                self.guild_id,
-                self.user_id
-            );
-            return;
-        };
-
-        sender
-            .send_async(CleanerSender::GuildId(self.guild_id))
-            .await
-            .ok();
     }
 
     async fn stream_and_transform(track: &ApiTrack) -> Result<Track, PlayerError> {
