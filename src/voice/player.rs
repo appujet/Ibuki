@@ -7,10 +7,11 @@ use axum::extract::ws::Message;
 use flume::WeakSender;
 use songbird::{
     Config, ConnectionInfo, CoreEvent, Driver, Event, TrackEvent,
+    driver::Bitrate,
     id::{GuildId, UserId},
     tracks::{Track, TrackHandle, TrackState},
 };
-use tokio::sync::Mutex;
+use tokio::{sync::Mutex, task};
 
 use super::{events::PlayerEvent, manager::CleanerSender};
 use crate::{
@@ -27,7 +28,7 @@ pub struct Player {
     pub data: Arc<Mutex<ApiPlayer>>,
     pub websocket: WeakSender<Message>,
     pub cleaner: WeakSender<CleanerSender>,
-    pub driver: Arc<Mutex<Driver>>,
+    pub driver: Arc<Mutex<Option<Driver>>>,
     pub handle: Arc<Mutex<Option<TrackHandle>>>,
 }
 
@@ -40,19 +41,6 @@ impl Player {
         guild_id: GuildId,
         server_update: VoiceData,
     ) -> Result<Self, PlayerError> {
-        let mut manager = Driver::new(config.unwrap_or_default());
-
-        let connection = ConnectionInfo {
-            channel_id: None,
-            endpoint: server_update.endpoint.to_owned(),
-            session_id: server_update.session_id.to_owned(),
-            token: server_update.token.to_owned(),
-            guild_id,
-            user_id,
-        };
-
-        manager.connect(connection).await?;
-
         let player_info = ApiPlayer {
             guild_id: guild_id.0.get(),
             track: None,
@@ -62,14 +50,13 @@ impl Player {
                 // todo: fix this
                 time: Instant::now().elapsed().as_secs(),
                 position: 0,
-                connected: true,
+                connected: false,
                 ping: None,
             },
-            voice: server_update,
+            voice: server_update.clone(),
             filters: serde_json::Value::Object(serde_json::Map::new()),
         };
 
-        let driver = Arc::new(Mutex::new(manager));
         let active = Arc::new(AtomicBool::new(false));
         let data = Arc::new(Mutex::new(player_info));
 
@@ -80,23 +67,11 @@ impl Player {
             data,
             websocket,
             cleaner,
-            driver,
+            driver: Arc::new(Mutex::new(None)),
             handle: Arc::new(Mutex::new(None)),
         };
 
-        let mut driver = player.driver.lock().await;
-
-        driver.add_global_event(
-            Event::Core(CoreEvent::DriverDisconnect),
-            PlayerEvent::new(Event::Core(CoreEvent::DriverDisconnect), &player),
-        );
-
-        driver.add_global_event(
-            Event::Periodic(Duration::from_secs(10), None),
-            PlayerEvent::new(Event::Periodic(Duration::from_secs(10), None), &player),
-        );
-
-        drop(driver);
+        player.connect(&server_update, config).await?;
 
         Ok(player)
     }
@@ -113,7 +88,7 @@ impl Player {
         Some(state.clone())
     }
 
-    pub async fn update(
+    pub async fn connect(
         &self,
         server_update: &VoiceData,
         config: Option<Config>,
@@ -127,19 +102,40 @@ impl Player {
             user_id: self.user_id,
         };
 
-        let mut driver = self.driver.lock().await;
+        let mut guard = self.driver.lock().await;
 
-        if let Some(config) = config {
-            driver.set_config(config);
+        if guard.is_none() {
+            let mut driver = Driver::new(config.clone().unwrap_or_default());
+
+            driver.set_bitrate(Bitrate::Max);
+
+            driver.add_global_event(
+                Event::Core(CoreEvent::DriverDisconnect),
+                PlayerEvent::new(Event::Core(CoreEvent::DriverDisconnect), self),
+            );
+
+            driver.add_global_event(
+                Event::Periodic(Duration::from_secs(10), None),
+                PlayerEvent::new(Event::Periodic(Duration::from_secs(10), None), self),
+            );
+
+            let _ = guard.insert(driver);
+
+            drop(guard);
+
+            return Box::pin(self.connect(server_update, config)).await;
         }
+
+        let driver = guard.as_mut().ok_or(PlayerError::MissingDriver)?;
 
         driver.connect(connection).await?;
 
-        drop(driver);
+        drop(guard);
 
-        let mut data = self.data.lock().await;
+        let mut guard = self.data.lock().await;
 
-        data.voice = server_update.clone();
+        guard.state.connected = true;
+        guard.voice = server_update.clone();
 
         Ok(())
     }
@@ -147,9 +143,17 @@ impl Player {
     pub async fn disconnect(&self) {
         self.stop().await;
 
-        let mut driver = self.driver.lock().await;
+        let mut guard = self.driver.lock().await;
 
-        driver.leave();
+        if let Some(driver) = guard.take().as_mut() {
+            driver.leave();
+        }
+
+        drop(guard);
+
+        let mut guard = self.data.lock().await;
+
+        guard.state.connected = false;
     }
 
     pub async fn play(&self, encoded: String) -> Result<(), PlayerError> {
@@ -165,11 +169,19 @@ impl Player {
 
         self.stop().await;
 
-        let mut driver = self.driver.lock().await;
+        tracing::info!("Before Lock");
+
+        let mut guard = self.driver.lock().await;
+
+        tracing::info!("Before Lock 1");
+
+        let driver = guard.as_mut().ok_or(PlayerError::MissingDriver)?;
+
+        tracing::info!("Trying to play {}", api_track.encoded);
 
         let track_handle = driver.play_only(track);
 
-        drop(driver);
+        drop(guard);
 
         track_handle.add_event(
             Event::Track(TrackEvent::Play),
@@ -219,5 +231,31 @@ impl Player {
         };
 
         Ok(Track::new_with_data(input, Arc::new(track.clone())))
+    }
+}
+
+impl Drop for Player {
+    fn drop(&mut self) {
+        let arc_driver = self.driver.clone();
+
+        task::block_in_place(move || {
+            if let Some(driver) = arc_driver.blocking_lock().take() {
+                drop(driver);
+            }
+        });
+
+        let arc_handle = self.handle.clone();
+
+        task::block_in_place(move || {
+            if let Some(handle) = arc_handle.blocking_lock().take() {
+                drop(handle);
+            }
+        });
+
+        tracing::info!(
+            "Player with [GuildId: {}] [UserId: {}] dropped!",
+            self.guild_id,
+            self.user_id
+        );
     }
 }

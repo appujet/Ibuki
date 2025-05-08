@@ -12,14 +12,6 @@ use songbird::id::{GuildId, UserId};
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
-async fn destroy_player(players: Arc<DashMap<GuildId, Player>>, guild_id: GuildId) {
-    let Some((_, player)) = players.remove(&guild_id) else {
-        return;
-    };
-
-    player.disconnect().await;
-}
-
 pub enum CleanerSender {
     GuildId(GuildId),
     Destroy,
@@ -48,7 +40,7 @@ impl PlayerManager {
         tokio::spawn(async move {
             while let Ok(data) = listener.recv_async().await {
                 if let CleanerSender::GuildId(guild_id) = data {
-                    destroy_player(players.clone(), guild_id).await;
+                    players.remove(&guild_id);
                     continue;
                 }
                 break;
@@ -76,8 +68,8 @@ impl PlayerManager {
             .unwrap_or(0)
     }
 
-    pub fn get_player(&self, guild_id: GuildId) -> Option<Ref<'_, GuildId, Player>> {
-        self.players.get(&guild_id)
+    pub fn get_player(&self, guild_id: &GuildId) -> Option<Ref<'_, GuildId, Player>> {
+        self.players.get(guild_id)
     }
 
     pub async fn create_player(
@@ -105,22 +97,30 @@ impl PlayerManager {
                 .ok_or(PlayerManagerError::MissingPlayer);
         };
 
-        player.update(&server_update, config).await?;
+        player.connect(&server_update, config).await?;
 
         Ok(player)
     }
 
-    pub async fn destroy_player(&self, guild_id: GuildId) {
-        destroy_player(self.players.clone(), guild_id).await;
+    pub async fn disconnect_player(&self, guild_id: &GuildId) {
+        let Some(player) = self.get_player(guild_id) else {
+            return;
+        };
+
+        player.disconnect().await;
     }
 
-    pub async fn destroy(&self) {
-        for player in self.players.iter() {
-            player.disconnect().await;
-        }
+    pub fn disconnect_all(&self) {
+        self.players.clear();
+    }
+}
+
+impl Drop for PlayerManager {
+    fn drop(&mut self) {
+        self.cleaner.send(CleanerSender::Destroy).ok();
 
         self.players.clear();
 
-        self.cleaner.send_async(CleanerSender::Destroy).await.ok();
+        tracing::info!("PlayerManager with [UserId: {}] dropped!", self.user_id);
     }
 }

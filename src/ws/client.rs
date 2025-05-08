@@ -83,7 +83,7 @@ impl WebsocketClient {
         } else {
             let _ = self.message_receiver.drain();
 
-            self.player_manager.destroy().await;
+            self.player_manager.disconnect_all();
 
             self.session_id = Uuid::new_v4().as_u128();
 
@@ -134,7 +134,7 @@ impl WebsocketClient {
             let connections = manager.get_players_len();
             let players = manager.get_active_players_len();
 
-            manager.destroy().await;
+            manager.disconnect_all();
 
             Clients.remove(&user_id);
 
@@ -223,13 +223,13 @@ impl WebsocketClient {
     /**
      * Disconnects without close code and clears the voice connections
      */
-    pub async fn destroy(&mut self) {
+    pub fn destroy(&mut self) {
         self.handles.retain(|handle| {
             handle.abort();
             false
         });
 
-        self.player_manager.destroy().await;
+        self.player_manager.disconnect_all();
     }
 }
 

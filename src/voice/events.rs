@@ -38,7 +38,7 @@ pub struct PlayerEvent {
     pub data: Weak<Mutex<ApiPlayer>>,
     pub websocket: WeakSender<Message>,
     pub cleaner: WeakSender<CleanerSender>,
-    pub driver: Weak<Mutex<Driver>>,
+    pub driver: Weak<Mutex<Option<Driver>>>,
     pub handle: Weak<Mutex<Option<TrackHandle>>>,
 }
 
@@ -82,9 +82,13 @@ impl PlayerEvent {
             self.stop(stop).await;
         }
 
-        let mutex = self.driver.upgrade()?;
+        let arc = self.driver.upgrade()?;
 
-        mutex.lock().await.leave();
+        let mut guard = arc.lock().await;
+
+        if let Some(driver) = guard.as_mut() {
+            driver.leave();
+        }
 
         Some(())
     }

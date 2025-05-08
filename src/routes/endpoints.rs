@@ -32,7 +32,7 @@ pub async fn get_player(
 
     let _ = client
         .player_manager
-        .get_player(id)
+        .get_player(&id)
         .ok_or(EndpointError::NotFound)?;
 
     let player = Player {
@@ -77,7 +77,7 @@ pub async fn update_player(
 
     let id = GuildId::from(NonZeroU64::try_from(IbukiGuildId(guild_id))?);
 
-    if client.player_manager.get_player(id).is_none() && update_player.voice.is_none() {
+    if client.player_manager.get_player(&id).is_none() && update_player.voice.is_none() {
         return Err(EndpointError::NotFound);
     }
 
@@ -90,7 +90,7 @@ pub async fn update_player(
 
     let player = client
         .player_manager
-        .get_player(id)
+        .get_player(&id)
         .ok_or(EndpointError::NotFound)?;
 
     if let Some(Some(encoded)) = update_player.track.map(|track| track.encoded) {
@@ -146,7 +146,7 @@ pub async fn destroy_player(
 
     let id = GuildId::from(NonZeroU64::try_from(IbukiGuildId(guild_id))?);
 
-    client.player_manager.destroy_player(id).await;
+    client.player_manager.disconnect_player(&id).await;
 
     Ok(Response::new(Body::from(())))
 }
