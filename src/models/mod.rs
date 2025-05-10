@@ -277,10 +277,10 @@ pub struct Stats {
 #[serde(tag = "op")]
 #[serde(rename_all = "camelCase")]
 pub enum NodeMessage {
-    Ready(Ready),
-    PlayerUpdate(PlayerUpdate),
-    Stats(Stats),
-    Event(PlayerEvents),
+    Ready(Box<Ready>),
+    PlayerUpdate(Box<PlayerUpdate>),
+    Stats(Box<Stats>),
+    Event(Box<PlayerEvents>),
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

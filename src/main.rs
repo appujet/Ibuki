@@ -7,10 +7,12 @@ use axum::{
     middleware::from_fn,
     routing, serve,
 };
+use cap::Cap;
 use dashmap::DashMap;
+use dlmalloc::GlobalDlmalloc;
 use dotenv::dotenv;
 use models::{Cpu, Memory, NodeMessage, Stats};
-use songbird::id::UserId;
+use songbird::{driver::Scheduler, id::UserId};
 use std::sync::LazyLock;
 use std::{env::set_var, net::SocketAddr};
 use tokio::{
@@ -32,15 +34,20 @@ mod util;
 mod voice;
 mod ws;
 
+#[global_allocator]
+static ALLOCATOR: Cap<GlobalDlmalloc> = Cap::new(GlobalDlmalloc, usize::MAX);
+#[allow(non_upper_case_globals)]
+pub static Scheduler: LazyLock<Scheduler> = LazyLock::new(Scheduler::default);
 #[allow(non_upper_case_globals)]
 pub static Clients: LazyLock<DashMap<UserId, WebsocketClient>> = LazyLock::new(DashMap::new);
-
 #[allow(non_upper_case_globals)]
 pub static Sources: LazyLock<SourceManager> = LazyLock::new(SourceManager::new);
 
 #[main(flavor = "multi_thread")]
 async fn main() {
     unsafe { set_var("RUST_BACKTRACE", "1") };
+
+    ALLOCATOR.set_limit(10 * 1024 * 1024).unwrap();
 
     dotenv().ok();
 
@@ -64,14 +71,25 @@ async fn main() {
         loop {
             interval.tick().await;
 
+            let used = ALLOCATOR.allocated() as u64;
+            let free = ALLOCATOR.remaining() as u64;
+            let limit = ALLOCATOR.limit() as u64;
+
+            tracing::info!(
+                "System Memory Usage: [Used: {:.2} MB] [Free: {:.2} MB] [Limit: {:.2} MB]",
+                (used as f64 / 1048576.00),
+                (free as f64 / 1048576.00),
+                (limit as f64 / 1048576.00)
+            );
+
             // todo: fix stats placeholder
             let stats = Stats {
-                players: 0,
-                playing_players: 0,
+                players: Scheduler.total_tasks() as u32,
+                playing_players: Scheduler.live_tasks() as u32,
                 uptime: 0,
                 memory: Memory {
-                    free: 0,
-                    used: 0,
+                    free,
+                    used,
                     allocated: 0,
                     reservable: 0,
                 },
@@ -83,14 +101,14 @@ async fn main() {
                 frame_stats: None,
             };
 
-            let serialized = serde_json::to_string(&NodeMessage::Stats(stats.clone())).unwrap();
+            let serialized = serde_json::to_string(&NodeMessage::Stats(Box::new(stats))).unwrap();
 
             let set = Clients
                 .iter()
                 .map(|client| {
                     let clone = serialized.clone();
                     async move {
-                        client.send(Message::Text(Utf8Bytes::from(clone))).await;
+                        let _ = client.send(Message::Text(Utf8Bytes::from(clone))).await;
                     }
                 })
                 .collect::<JoinSet<()>>();
@@ -137,5 +155,5 @@ async fn main() {
         app.into_make_service_with_connect_info::<SocketAddr>(),
     )
     .await
-    .unwrap();
+    .ok();
 }

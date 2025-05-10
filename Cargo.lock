@@ -252,6 +252,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d71b6127be86fdcfddb610f7182ac57211d4b18a3e9c82eb2d17662f2227ad6a"
 
 [[package]]
+name = "cap"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6f125eb85b84a24c36b02ed1d22c9dd8632f53b3cde6e4d23512f94021030003"
+
+[[package]]
 name = "cc"
 version = "1.2.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -556,6 +562,17 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.101",
+]
+
+[[package]]
+name = "dlmalloc"
+version = "0.2.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8cff88b751e7a276c4ab0e222c3f355190adc6dde9ce39c851db39da34990df7"
+dependencies = [
+ "cfg-if",
+ "libc",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -1072,7 +1089,9 @@ dependencies = [
  "axum",
  "base64 0.22.1",
  "byteorder",
+ "cap",
  "dashmap",
+ "dlmalloc",
  "dotenv",
  "flume",
  "futures",

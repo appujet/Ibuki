@@ -15,7 +15,7 @@ use tokio::{sync::Mutex, task};
 
 use super::{events::PlayerEvent, manager::CleanerSender};
 use crate::{
-    Sources,
+    Scheduler, Sources,
     models::{Player as ApiPlayer, PlayerState, Track as ApiTrack, VoiceData},
     util::{decoder::decode_base64, errors::PlayerError, source::Source},
 };
@@ -41,7 +41,7 @@ impl Player {
         guild_id: GuildId,
         server_update: VoiceData,
     ) -> Result<Self, PlayerError> {
-        let player_info = ApiPlayer {
+        let data = ApiPlayer {
             guild_id: guild_id.0.get(),
             track: None,
             volume: 1,
@@ -58,7 +58,7 @@ impl Player {
         };
 
         let active = Arc::new(AtomicBool::new(false));
-        let data = Arc::new(Mutex::new(player_info));
+        let data = Arc::new(Mutex::new(data));
 
         let player = Player {
             user_id,
@@ -105,7 +105,9 @@ impl Player {
         let mut guard = self.driver.lock().await;
 
         if guard.is_none() {
-            let mut driver = Driver::new(config.clone().unwrap_or_default());
+            let config = config.unwrap_or_default().scheduler(Scheduler.to_owned());
+
+            let mut driver = Driver::new(config.clone());
 
             driver.set_bitrate(Bitrate::Max);
 
@@ -123,7 +125,7 @@ impl Player {
 
             drop(guard);
 
-            return Box::pin(self.connect(server_update, config)).await;
+            return Box::pin(self.connect(server_update, Some(config))).await;
         }
 
         let driver = guard.as_mut().ok_or(PlayerError::MissingDriver)?;
@@ -141,11 +143,10 @@ impl Player {
     }
 
     pub async fn disconnect(&self) {
-        self.stop().await;
-
         let mut guard = self.driver.lock().await;
 
         if let Some(driver) = guard.take().as_mut() {
+            driver.stop();
             driver.leave();
         }
 
@@ -167,17 +168,11 @@ impl Player {
 
         let track = Player::stream_and_transform(&api_track).await?;
 
-        self.stop().await;
-
-        tracing::info!("Before Lock");
-
         let mut guard = self.driver.lock().await;
-
-        tracing::info!("Before Lock 1");
 
         let driver = guard.as_mut().ok_or(PlayerError::MissingDriver)?;
 
-        tracing::info!("Trying to play {}", api_track.encoded);
+        driver.stop();
 
         let track_handle = driver.play_only(track);
 
@@ -216,10 +211,10 @@ impl Player {
     }
 
     pub async fn stop(&self) {
-        let mut handle = self.handle.lock().await;
+        let mut guard = self.driver.lock().await;
 
-        if let Some(handle) = handle.take() {
-            handle.stop().ok();
+        if let Some(driver) = guard.as_mut() {
+            driver.stop();
         }
     }
 

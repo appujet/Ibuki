@@ -194,7 +194,7 @@ async fn handle_player_event(player_event: PlayerEvent, data_result: DataResult)
             drop(data);
             drop(arc);
 
-            let serialized = serde_json::to_string(&NodeMessage::PlayerUpdate(event)).ok()?;
+            let serialized = serde_json::to_string(&NodeMessage::PlayerUpdate(Box::new(event))).ok()?;
 
             player_event
                 .send_to_websocket(Message::Text(Utf8Bytes::from(serialized)))
@@ -252,7 +252,7 @@ async fn handle_player_event(player_event: PlayerEvent, data_result: DataResult)
                     };
 
                     let serialized = serde_json::to_string(&NodeMessage::Event(
-                        PlayerEvents::TrackEndEvent(event),
+                        Box::new(PlayerEvents::TrackEndEvent(event)),
                     ))
                     .ok()?;
 
@@ -283,7 +283,7 @@ async fn handle_player_event(player_event: PlayerEvent, data_result: DataResult)
                     };
 
                     let serialized = serde_json::to_string(&NodeMessage::Event(
-                        PlayerEvents::TrackStartEvent(event),
+                        Box::new(PlayerEvents::TrackStartEvent(event)),
                     ))
                     .ok()?;
 
@@ -325,7 +325,7 @@ async fn handle_player_event(player_event: PlayerEvent, data_result: DataResult)
                     };
 
                     let serialized = serde_json::to_string(&NodeMessage::Event(
-                        PlayerEvents::TrackExceptionEvent(event),
+                        Box::new(PlayerEvents::TrackExceptionEvent(event)),
                     ))
                     .ok()?;
 
@@ -360,7 +360,7 @@ async fn handle_player_event(player_event: PlayerEvent, data_result: DataResult)
             };
 
             let serialized = serde_json::to_string(&NodeMessage::Event(
-                PlayerEvents::WebSocketClosedEvent(event),
+                Box::new(PlayerEvents::WebSocketClosedEvent(event)),
             ))
             .ok()?;
 

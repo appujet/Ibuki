@@ -111,7 +111,7 @@ impl WebsocketClient {
                     break;
                 }
                 if let Message::Text(data) = message {
-                    tracing::info!("Websocket connection received a message: {}", data.as_str());
+                    tracing::debug!("Websocket connection received a message: {}", data.as_str());
                 }
             }
 
@@ -161,7 +161,7 @@ impl WebsocketClient {
                     continue;
                 }
 
-                tracing::info!(
+                tracing::debug!(
                     "Sent [{}] to websocket client",
                     message.to_text().unwrap_or("Unknown")
                 );
@@ -178,12 +178,12 @@ impl WebsocketClient {
         };
 
         // Normally, this should never happen, but we ignore it if it does happen and log it
-        let Ok(serialized) = serde_json::to_string(&NodeMessage::Ready(event)) else {
+        let Ok(serialized) = serde_json::to_string(&NodeMessage::Ready(Box::new(event))) else {
             tracing::warn!("Failed to encode ready op, this should not happen usually");
             return Ok(resumed);
         };
 
-        self.send(Message::Text(Utf8Bytes::from(serialized))).await;
+        let _ = self.send(Message::Text(Utf8Bytes::from(serialized))).await;
 
         Ok(resumed)
     }
