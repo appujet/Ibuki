@@ -1,4 +1,4 @@
-use crate::models::VoiceData;
+use crate::models::ApiVoiceData;
 use crate::util::errors::PlayerManagerError;
 
 use super::player::Player;
@@ -56,7 +56,7 @@ impl PlayerManager {
     pub async fn create_player(
         &self,
         guild_id: GuildId,
-        server_update: VoiceData,
+        server_update: ApiVoiceData,
         config: Option<Config>,
     ) -> Result<Ref<'_, GuildId, Player>, PlayerManagerError> {
         let Some(player) = self.players.get(&guild_id) else {

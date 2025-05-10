@@ -12,7 +12,7 @@ use cap::Cap;
 use dashmap::DashMap;
 use dlmalloc::GlobalDlmalloc;
 use dotenv::dotenv;
-use models::{Cpu, Memory, NodeMessage, Stats};
+use models::{ApiCpu, ApiMemory, ApiNodeMessage, ApiStats};
 use songbird::{driver::Scheduler, id::UserId};
 use std::sync::LazyLock;
 use std::{env::set_var, net::SocketAddr};
@@ -83,17 +83,17 @@ async fn main() {
             );
 
             // todo: fix stats placeholder
-            let stats = Stats {
+            let stats = ApiStats {
                 players: Scheduler.total_tasks() as u32,
                 playing_players: Scheduler.live_tasks() as u32,
                 uptime: 0,
-                memory: Memory {
+                memory: ApiMemory {
                     free,
                     used,
                     allocated: 0,
                     reservable: 0,
                 },
-                cpu: Cpu {
+                cpu: ApiCpu {
                     cores: 0,
                     system_load: 0.0,
                     lavalink_load: 0.0,
@@ -101,7 +101,8 @@ async fn main() {
                 frame_stats: None,
             };
 
-            let serialized = serde_json::to_string(&NodeMessage::Stats(Box::new(stats))).unwrap();
+            let serialized =
+                serde_json::to_string(&ApiNodeMessage::Stats(Box::new(stats))).unwrap();
 
             let set = Clients
                 .iter()

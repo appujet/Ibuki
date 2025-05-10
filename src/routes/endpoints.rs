@@ -1,7 +1,9 @@
 use std::num::NonZeroU64;
 
 use super::{DecodeQueryString, EncodeQueryString, PlayerMethodsPath};
-use crate::models::{DataType, Player, PlayerOptions, PlayerState, Track as IbukiTrack, VoiceData};
+use crate::models::{
+    ApiPlayer, ApiPlayerOptions, ApiPlayerState, ApiTrack, ApiTrackResult, ApiVoiceData,
+};
 use crate::util::converter::numbers::IbukiGuildId;
 use crate::util::decoder::decode_base64;
 use crate::util::errors::EndpointError;
@@ -33,18 +35,18 @@ pub async fn get_player(
         .get_player(&id)
         .ok_or(EndpointError::NotFound)?;
 
-    let player = Player {
+    let player = ApiPlayer {
         guild_id: id.0.get(),
         track: None,
         volume: 1,
         paused: false,
-        state: PlayerState {
+        state: ApiPlayerState {
             time: 0,
             position: 0,
             connected: true,
             ping: None,
         },
-        voice: VoiceData {
+        voice: ApiVoiceData {
             token: "Placeholder".into(),
             endpoint: "Placeholder".into(),
             session_id: "Placeholder".into(),
@@ -66,7 +68,7 @@ pub async fn update_player(
         session_id,
         guild_id,
     }): Path<PlayerMethodsPath>,
-    Json(update_player): Json<PlayerOptions>,
+    Json(update_player): Json<ApiPlayerOptions>,
 ) -> Result<Response<Body>, EndpointError> {
     tracing::info!("Got an update player request");
 
@@ -105,18 +107,18 @@ pub async fn update_player(
         }
     }
 
-    let player = Player {
+    let player = ApiPlayer {
         guild_id: id.0.get(),
         track: None,
         volume: 1,
         paused: false,
-        state: PlayerState {
+        state: ApiPlayerState {
             time: 0,
             position: 0,
             connected: true,
             ping: None,
         },
-        voice: VoiceData {
+        voice: ApiVoiceData {
             token: "Placeholder".into(),
             endpoint: "Placeholder".into(),
             session_id: "Placeholder".into(),
@@ -155,7 +157,7 @@ pub async fn destroy_player(
 pub async fn decode(query: Query<DecodeQueryString>) -> Result<Response<Body>, EndpointError> {
     let track = decode_base64(&query.track)?;
 
-    let track = IbukiTrack {
+    let track = ApiTrack {
         encoded: query.track.clone(),
         info: track,
         plugin_info: serde_json::Value::Null,
@@ -168,8 +170,8 @@ pub async fn decode(query: Query<DecodeQueryString>) -> Result<Response<Body>, E
 
 #[tracing::instrument]
 pub async fn encode(query: Query<EncodeQueryString>) -> Result<Response<Body>, EndpointError> {
-    let track: DataType = {
-        let mut result = DataType::Empty(None);
+    let track: ApiTrackResult = {
+        let mut result = ApiTrackResult::Empty(None);
         if Sources.youtube.valid_url(&query.identifier).await {
             result = Sources.youtube.resolve(&query.identifier).await?;
         } else if Sources.http.valid_url(&query.identifier).await {

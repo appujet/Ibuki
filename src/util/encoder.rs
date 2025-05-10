@@ -1,4 +1,6 @@
-use crate::{constants::TRACK_INFO_VERSIONED, models::TrackInfo, util::errors::Base64EncodeError};
+use crate::{
+    constants::TRACK_INFO_VERSIONED, models::ApiTrackInfo, util::errors::Base64EncodeError,
+};
 use base64::{Engine, prelude::BASE64_STANDARD};
 use byteorder::{BigEndian, WriteBytesExt};
 use std::io::{Cursor, Write};
@@ -28,7 +30,7 @@ fn optional_write_string(
 /**
  * Unfortunately this isnt cross compatible with lavalink for some reason
  */
-pub fn encode_base64(track_info: &TrackInfo) -> Result<String, Base64EncodeError> {
+pub fn encode_base64(track_info: &ApiTrackInfo) -> Result<String, Base64EncodeError> {
     let mut wtr = Cursor::new(Vec::new());
 
     let flags = 1;

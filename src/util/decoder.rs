@@ -4,7 +4,9 @@
 // Thanks to @Takase (https://github.com/takase1121) for helping me with this
 //
 
-use crate::{constants::TRACK_INFO_VERSIONED, models::TrackInfo, util::errors::Base64DecodeError};
+use crate::{
+    constants::TRACK_INFO_VERSIONED, models::ApiTrackInfo, util::errors::Base64DecodeError,
+};
 use base64::{Engine, prelude::BASE64_STANDARD};
 use byteorder::{BigEndian, ReadBytesExt};
 use std::io::{Cursor, Read};
@@ -27,7 +29,7 @@ fn optional_read_string(rdr: &mut Cursor<Vec<u8>>) -> Result<Option<String>, Bas
 /**
  * This decodes lavalink base64 strings just fine
  */
-pub fn decode_base64(encoded: &String) -> Result<TrackInfo, Base64DecodeError> {
+pub fn decode_base64(encoded: &String) -> Result<ApiTrackInfo, Base64DecodeError> {
     let decoded = BASE64_STANDARD.decode(encoded)?;
 
     let mut rdr = Cursor::new(decoded);
@@ -59,7 +61,7 @@ pub fn decode_base64(encoded: &String) -> Result<TrackInfo, Base64DecodeError> {
 
     let position = rdr.read_u64::<BigEndian>()?;
 
-    Ok(TrackInfo {
+    Ok(ApiTrackInfo {
         title,
         author,
         length,

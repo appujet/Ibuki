@@ -1,9 +1,7 @@
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
 
-//
-// Lavalink Types (To be refactored in future)
-//
+// Lavalink Types: reduced to what we actually need
 
 fn str_to_u64<'de, T, D>(de: D) -> Result<T, D::Error>
 where
@@ -44,31 +42,31 @@ pub enum LoadType {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 #[serde(tag = "loadType", content = "data")]
-pub enum DataType {
-    Track(Track),
-    Playlist(TrackPlaylist),
-    Search(Vec<Track>),
-    Error(TrackLoadException),
+pub enum ApiTrackResult {
+    Track(ApiTrack),
+    Playlist(ApiTrackPlaylist),
+    Search(Vec<ApiTrack>),
+    Error(ApiTrackLoadException),
     Empty(Option<Value>),
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct PlaylistInfo {
+pub struct ApiPlaylistInfo {
     pub name: String,
     pub selected_track: i32,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct TrackPlaylist {
-    pub info: PlaylistInfo,
+pub struct ApiTrackPlaylist {
+    pub info: ApiPlaylistInfo,
     pub plugin_info: Value,
-    pub tracks: Vec<Track>,
+    pub tracks: Vec<ApiTrack>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct TrackLoadException {
+pub struct ApiTrackLoadException {
     pub message: String,
     pub severity: Severity,
     pub cause: String,
@@ -76,7 +74,7 @@ pub struct TrackLoadException {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct VoiceData {
+pub struct ApiVoiceData {
     pub token: String,
     pub endpoint: String,
     pub session_id: String,
@@ -87,7 +85,7 @@ pub struct VoiceData {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct PlayerState {
+pub struct ApiPlayerState {
     pub time: u64,
     pub position: u32,
     pub connected: bool,
@@ -96,20 +94,20 @@ pub struct PlayerState {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Player {
+pub struct ApiPlayer {
     #[serde(deserialize_with = "str_to_u64", serialize_with = "u64_to_str")]
     pub guild_id: u64,
-    pub track: Option<Track>,
+    pub track: Option<ApiTrack>,
     pub volume: u32,
     pub paused: bool,
-    pub state: PlayerState,
-    pub voice: VoiceData,
+    pub state: ApiPlayerState,
+    pub voice: ApiVoiceData,
     pub filters: Value,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct TrackInfo {
+pub struct ApiTrackInfo {
     pub identifier: String,
     pub is_seekable: bool,
     pub author: String,
@@ -125,14 +123,14 @@ pub struct TrackInfo {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Track {
+pub struct ApiTrack {
     pub encoded: String,
-    pub info: TrackInfo,
+    pub info: ApiTrackInfo,
     pub plugin_info: Value,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Exception {
+pub struct ApiException {
     #[serde(deserialize_with = "str_to_u64", serialize_with = "u64_to_str")]
     pub guild_id: u64,
     pub message: Option<String>,
@@ -142,42 +140,42 @@ pub struct Exception {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct TrackStart {
+pub struct ApiTrackStart {
     #[serde(deserialize_with = "str_to_u64", serialize_with = "u64_to_str")]
     pub guild_id: u64,
-    pub track: Track,
+    pub track: ApiTrack,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct TrackEnd {
+pub struct ApiTrackEnd {
     #[serde(deserialize_with = "str_to_u64", serialize_with = "u64_to_str")]
     pub guild_id: u64,
-    pub track: Track,
+    pub track: ApiTrack,
     pub reason: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct TrackException {
+pub struct ApiTrackException {
     #[serde(deserialize_with = "str_to_u64", serialize_with = "u64_to_str")]
     pub guild_id: u64,
-    pub track: Track,
-    pub exception: Exception,
+    pub track: ApiTrack,
+    pub exception: ApiException,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct TrackStuck {
+pub struct ApiTrackStuck {
     #[serde(deserialize_with = "str_to_u64", serialize_with = "u64_to_str")]
     pub guild_id: u64,
-    pub track: Track,
+    pub track: ApiTrack,
     pub threshold_ms: usize,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct WebSocketClosed {
+pub struct ApiWebSocketClosed {
     #[serde(deserialize_with = "str_to_u64", serialize_with = "u64_to_str")]
     pub guild_id: u64,
     pub code: usize,
@@ -188,17 +186,17 @@ pub struct WebSocketClosed {
 #[allow(clippy::enum_variant_names)]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "type")]
-pub enum PlayerEvents {
-    TrackStartEvent(TrackStart),
-    TrackEndEvent(TrackEnd),
-    TrackExceptionEvent(TrackException),
-    TrackStuckEvent(TrackStuck),
-    WebSocketClosedEvent(WebSocketClosed),
+pub enum ApiPlayerEvents {
+    TrackStartEvent(ApiTrackStart),
+    TrackEndEvent(ApiTrackEnd),
+    TrackExceptionEvent(ApiTrackException),
+    TrackStuckEvent(ApiTrackStuck),
+    WebSocketClosedEvent(ApiWebSocketClosed),
 }
 
 #[derive(Default, Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct UpdatePlayerTrack {
+pub struct UpdateApiPlayerTrack {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub encoded: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -207,9 +205,9 @@ pub struct UpdatePlayerTrack {
 
 #[derive(Default, Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct PlayerOptions {
+pub struct ApiPlayerOptions {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub track: Option<UpdatePlayerTrack>,
+    pub track: Option<UpdateApiPlayerTrack>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub identifier: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -221,11 +219,11 @@ pub struct PlayerOptions {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub paused: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub voice: Option<VoiceData>,
+    pub voice: Option<ApiVoiceData>,
 }
 
 #[derive(Default, Clone, Debug, Serialize, Deserialize)]
-pub struct FrameStats {
+pub struct ApiFrameStats {
     pub sent: u64,
     pub nulled: u32,
     pub deficit: i32,
@@ -233,14 +231,14 @@ pub struct FrameStats {
 
 #[derive(Default, Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Cpu {
+pub struct ApiCpu {
     pub cores: u32,
     pub system_load: f64,
     pub lavalink_load: f64,
 }
 
 #[derive(Default, Clone, Debug, Serialize, Deserialize)]
-pub struct Memory {
+pub struct ApiMemory {
     pub free: u64,
     pub used: u64,
     pub allocated: u64,
@@ -249,43 +247,43 @@ pub struct Memory {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Ready {
+pub struct ApiReady {
     pub resumed: bool,
     pub session_id: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct PlayerUpdate {
+pub struct ApiPlayerUpdate {
     #[serde(deserialize_with = "str_to_u64", serialize_with = "u64_to_str")]
     pub guild_id: u64,
-    pub state: PlayerState,
+    pub state: ApiPlayerState,
 }
 
 #[derive(Default, Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Stats {
+pub struct ApiStats {
     pub players: u32,
     pub playing_players: u32,
     pub uptime: u64,
-    pub memory: Memory,
-    pub cpu: Cpu,
-    pub frame_stats: Option<FrameStats>,
+    pub memory: ApiMemory,
+    pub cpu: ApiCpu,
+    pub frame_stats: Option<ApiFrameStats>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "op")]
 #[serde(rename_all = "camelCase")]
-pub enum NodeMessage {
-    Ready(Box<Ready>),
-    PlayerUpdate(Box<PlayerUpdate>),
-    Stats(Box<Stats>),
-    Event(Box<PlayerEvents>),
+pub enum ApiNodeMessage {
+    Ready(Box<ApiReady>),
+    PlayerUpdate(Box<ApiPlayerUpdate>),
+    Stats(Box<ApiStats>),
+    Event(Box<ApiPlayerEvents>),
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SessionInfo {
+pub struct ApiSessionInfo {
     resuming: bool,
     timeout: u32,
 }

@@ -1,6 +1,6 @@
 use crate::models::{
-    Exception, NodeMessage, Player as ApiPlayer, PlayerEvents, PlayerUpdate, Track, TrackEnd,
-    TrackException, TrackStart, WebSocketClosed,
+    ApiException, ApiNodeMessage, ApiPlayer, ApiPlayerEvents, ApiPlayerUpdate, ApiTrack,
+    ApiTrackEnd, ApiTrackException, ApiTrackStart, ApiWebSocketClosed,
 };
 
 use async_trait::async_trait;
@@ -24,7 +24,7 @@ use super::{manager::CleanerSender, player::Player};
 enum DataResult {
     // probably usable in future
     #[allow(dead_code)]
-    Track(TrackState, Arc<Track>),
+    Track(TrackState, Arc<ApiTrack>),
     Disconnect(i32, String),
     Empty,
 }
@@ -132,7 +132,7 @@ impl EventHandler for PlayerEvent {
             EventContext::Track([(state, handle)]) => {
                 let state = state.to_owned().clone();
 
-                let track = handle.data::<Track>();
+                let track = handle.data::<ApiTrack>();
 
                 data_result = DataResult::Track(state, track);
             }
@@ -186,7 +186,7 @@ async fn handle_player_event(player_event: PlayerEvent, data_result: DataResult)
             data.state.position = state.position.as_millis() as u32;
             data.volume = state.volume as u32;
 
-            let event = PlayerUpdate {
+            let event = ApiPlayerUpdate {
                 guild_id: player_event.guild_id.0.get(),
                 state: data.state.clone(),
             };
@@ -194,7 +194,8 @@ async fn handle_player_event(player_event: PlayerEvent, data_result: DataResult)
             drop(data);
             drop(arc);
 
-            let serialized = serde_json::to_string(&NodeMessage::PlayerUpdate(Box::new(event))).ok()?;
+            let serialized =
+                serde_json::to_string(&ApiNodeMessage::PlayerUpdate(Box::new(event))).ok()?;
 
             player_event
                 .send_to_websocket(Message::Text(Utf8Bytes::from(serialized)))
@@ -245,15 +246,15 @@ async fn handle_player_event(player_event: PlayerEvent, data_result: DataResult)
 
                     player_event.stop(false).await;
 
-                    let event = TrackEnd {
+                    let event = ApiTrackEnd {
                         guild_id: player_event.guild_id.0.get(),
                         track: track.as_ref().clone(),
                         reason: String::from("Done playing the track"),
                     };
 
-                    let serialized = serde_json::to_string(&NodeMessage::Event(
-                        Box::new(PlayerEvents::TrackEndEvent(event)),
-                    ))
+                    let serialized = serde_json::to_string(&ApiNodeMessage::Event(Box::new(
+                        ApiPlayerEvents::TrackEndEvent(event),
+                    )))
                     .ok()?;
 
                     player_event
@@ -277,14 +278,14 @@ async fn handle_player_event(player_event: PlayerEvent, data_result: DataResult)
                     drop(data);
                     drop(arc);
 
-                    let event = TrackStart {
+                    let event = ApiTrackStart {
                         guild_id: player_event.guild_id.0.get(),
                         track: track.as_ref().clone(),
                     };
 
-                    let serialized = serde_json::to_string(&NodeMessage::Event(
-                        Box::new(PlayerEvents::TrackStartEvent(event)),
-                    ))
+                    let serialized = serde_json::to_string(&ApiNodeMessage::Event(Box::new(
+                        ApiPlayerEvents::TrackStartEvent(event),
+                    )))
                     .ok()?;
 
                     player_event
@@ -311,10 +312,10 @@ async fn handle_player_event(player_event: PlayerEvent, data_result: DataResult)
 
                     player_event.stop(false).await;
 
-                    let event = TrackException {
+                    let event = ApiTrackException {
                         guild_id: player_event.guild_id.0.get(),
                         track: track.as_ref().clone(),
-                        exception: Exception {
+                        exception: ApiException {
                             guild_id: player_event.guild_id.0.get(),
                             message: Some(String::from(
                                 "The track has encountered a runtime issue",
@@ -324,9 +325,9 @@ async fn handle_player_event(player_event: PlayerEvent, data_result: DataResult)
                         },
                     };
 
-                    let serialized = serde_json::to_string(&NodeMessage::Event(
-                        Box::new(PlayerEvents::TrackExceptionEvent(event)),
-                    ))
+                    let serialized = serde_json::to_string(&ApiNodeMessage::Event(Box::new(
+                        ApiPlayerEvents::TrackExceptionEvent(event),
+                    )))
                     .ok()?;
 
                     player_event
@@ -352,16 +353,16 @@ async fn handle_player_event(player_event: PlayerEvent, data_result: DataResult)
                 return None;
             };
 
-            let event = WebSocketClosed {
+            let event = ApiWebSocketClosed {
                 guild_id: player_event.guild_id.0.get(),
                 code: code as usize,
                 reason,
                 by_remote: code != 1000,
             };
 
-            let serialized = serde_json::to_string(&NodeMessage::Event(
-                Box::new(PlayerEvents::WebSocketClosedEvent(event)),
-            ))
+            let serialized = serde_json::to_string(&ApiNodeMessage::Event(Box::new(
+                ApiPlayerEvents::WebSocketClosedEvent(event),
+            )))
             .ok()?;
 
             player_event

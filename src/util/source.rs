@@ -1,10 +1,11 @@
 use std::time::Duration;
 
 use reqwest::Client;
-use songbird::input::{AuxMetadata, Input};
+use songbird::{input::AuxMetadata, tracks::Track};
 
 use crate::{
-    models::{DataType, TrackInfo},
+    Sources,
+    models::{ApiTrack, ApiTrackInfo, ApiTrackResult},
     source::{http::Http, youtube::Youtube},
 };
 
@@ -37,12 +38,12 @@ pub trait Source {
 
     async fn valid_url(&self, url: &str) -> bool;
 
-    async fn resolve(&self, url: &str) -> Result<DataType, ResolverError>;
+    async fn resolve(&self, url: &str) -> Result<ApiTrackResult, ResolverError>;
 
-    async fn stream(&self, track: &TrackInfo) -> Result<Input, ResolverError>;
+    async fn make_playable(&self, track: ApiTrackInfo) -> Result<Track, ResolverError>;
 }
 
-impl From<AuxMetadata> for TrackInfo {
+impl From<AuxMetadata> for ApiTrackInfo {
     fn from(metadata: AuxMetadata) -> Self {
         let identifier = metadata
             .source_url
@@ -55,7 +56,7 @@ impl From<AuxMetadata> for TrackInfo {
         let is_stream = length.as_millis() == Duration::from_millis(u64::MAX).as_millis();
         let title = metadata.title.unwrap_or(String::from("Unknown"));
 
-        TrackInfo {
+        ApiTrackInfo {
             identifier,
             is_seekable,
             author,
@@ -67,6 +68,18 @@ impl From<AuxMetadata> for TrackInfo {
             artwork_url: metadata.thumbnail,
             isrc: None,
             source_name: String::from("http"),
+        }
+    }
+}
+
+impl ApiTrack {
+    pub async fn make_playable(self) -> Result<Track, ResolverError> {
+        if self.info.source_name == "http" {
+            Sources.http.make_playable(self.info).await
+        } else if self.info.source_name == "youtube" {
+            Sources.youtube.make_playable(self.info).await
+        } else {
+            return Err(ResolverError::InputNotSupported);
         }
     }
 }

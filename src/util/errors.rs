@@ -19,6 +19,8 @@ pub enum ResolverError {
     AudioStream(#[from] songbird::input::AudioStreamError),
     #[error(transparent)]
     YoutubeError(#[from] rustypipe::error::Error),
+    #[error("The track provided is not supported")]
+    InputNotSupported,
 }
 
 #[derive(Error, Debug)]
@@ -41,8 +43,6 @@ pub enum PlayerError {
     MissingDriver,
     #[error("A connection is required to execute this action")]
     MissingConnection,
-    #[error("The track provided is not supported")]
-    InputNotSupported,
     #[error(transparent)]
     Base64Decode(#[from] Base64DecodeError),
     #[error(transparent)]

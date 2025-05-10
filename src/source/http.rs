@@ -1,10 +1,13 @@
-use std::str::FromStr;
+use std::{str::FromStr, sync::Arc};
 
 use reqwest::{Client, Url};
-use songbird::input::{AuxMetadata, Compose, HttpRequest, Input, LiveInput};
+use songbird::{
+    input::{AuxMetadata, Compose, HttpRequest, Input, LiveInput},
+    tracks::Track,
+};
 
 use crate::{
-    models::{DataType, Track, TrackInfo},
+    models::{ApiTrack, ApiTrackInfo, ApiTrackResult},
     util::{encoder::encode_base64, errors::ResolverError, source::Source},
 };
 
@@ -27,7 +30,7 @@ impl Source for Http {
         Url::from_str(url).ok().is_some()
     }
 
-    async fn resolve(&self, url: &str) -> Result<DataType, ResolverError> {
+    async fn resolve(&self, url: &str) -> Result<ApiTrackResult, ResolverError> {
         let mut request = HttpRequest::new(self.get_client(), url.to_string());
 
         let mut metadata = request
@@ -39,18 +42,18 @@ impl Source for Http {
             let _ = metadata.source_url.insert(url.to_owned());
         }
 
-        let info: TrackInfo = metadata.into();
+        let info: ApiTrackInfo = metadata.into();
 
-        let track = Track {
+        let track = ApiTrack {
             encoded: encode_base64(&info)?,
             info,
             plugin_info: serde_json::Value::Null,
         };
 
-        Ok(DataType::Track(track))
+        Ok(ApiTrackResult::Track(track))
     }
 
-    async fn stream(&self, track: &TrackInfo) -> Result<Input, ResolverError> {
+    async fn make_playable(&self, track: ApiTrackInfo) -> Result<Track, ResolverError> {
         let mut request = HttpRequest::new(
             self.get_client(),
             track
@@ -62,6 +65,6 @@ impl Source for Http {
         let stream = request.create_async().await?;
         let input = Input::Live(LiveInput::Raw(stream), None);
 
-        Ok(input)
+        Ok(Track::new_with_data(input, Arc::new(track)))
     }
 }

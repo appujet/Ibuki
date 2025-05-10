@@ -1,12 +1,17 @@
+use std::sync::Arc;
+
 use reqwest::Client;
 use rustypipe::{
     client::{ClientType, RustyPipe},
     model::{AudioFormat, UrlTarget},
 };
-use songbird::input::{Compose, HttpRequest, Input, LiveInput};
+use songbird::{
+    input::{Compose, HttpRequest, Input, LiveInput},
+    tracks::Track,
+};
 
 use crate::{
-    models::{DataType, PlaylistInfo, Track, TrackInfo, TrackPlaylist},
+    models::{ApiPlaylistInfo, ApiTrack, ApiTrackInfo, ApiTrackPlaylist, ApiTrackResult},
     util::{encoder::encode_base64, errors::ResolverError, source::Source},
 };
 
@@ -44,14 +49,16 @@ impl Source for Youtube {
         self.rusty_pipe.query().resolve_url(url, true).await.is_ok()
     }
 
-    async fn resolve(&self, url: &str) -> Result<DataType, ResolverError> {
+    async fn resolve(&self, url: &str) -> Result<ApiTrackResult, ResolverError> {
         let request = self.rusty_pipe.query().resolve_url(url, true).await?;
 
-        match request.to_owned() {
+        let request_url = request.to_url();
+
+        match request {
             UrlTarget::Video { id, .. } => {
                 let metadata = self.rusty_pipe.query().video_details(&id).await?;
 
-                let info = TrackInfo {
+                let info = ApiTrackInfo {
                     identifier: id.to_owned(),
                     is_seekable: !metadata.is_live,
                     author: metadata.channel.name,
@@ -60,26 +67,26 @@ impl Source for Youtube {
                     is_stream: metadata.is_live,
                     position: 0,
                     title: metadata.name,
-                    uri: Some(request.to_url()),
+                    uri: Some(request_url),
                     artwork_url: None,
                     isrc: None,
                     source_name: String::from("youtube"),
                 };
 
-                let track = Track {
+                let track = ApiTrack {
                     encoded: encode_base64(&info)?,
                     info,
                     plugin_info: serde_json::Value::Null,
                 };
 
-                Ok(DataType::Track(track))
+                Ok(ApiTrackResult::Track(track))
             }
-            UrlTarget::Channel { .. } => Ok(DataType::Empty(None)),
+            UrlTarget::Channel { .. } => Ok(ApiTrackResult::Empty(None)),
             UrlTarget::Playlist { id } => {
                 let mut metadata = self.rusty_pipe.query().playlist(&id).await?;
 
-                let mut playlist = TrackPlaylist {
-                    info: PlaylistInfo {
+                let mut playlist = ApiTrackPlaylist {
+                    info: ApiPlaylistInfo {
                         name: metadata.name,
                         selected_track: 0,
                     },
@@ -99,7 +106,7 @@ impl Source for Youtube {
                         .resolve_string(&video.id, true)
                         .await?;
 
-                    let info = TrackInfo {
+                    let info = ApiTrackInfo {
                         identifier: video.id,
                         is_seekable: !video.is_live,
                         author: video
@@ -116,7 +123,7 @@ impl Source for Youtube {
                         source_name: String::from("youtube"),
                     };
 
-                    let track = Track {
+                    let track = ApiTrack {
                         encoded: encode_base64(&info)?,
                         info,
                         plugin_info: serde_json::Value::Null,
@@ -125,13 +132,13 @@ impl Source for Youtube {
                     playlist.tracks.push(track);
                 }
 
-                Ok(DataType::Playlist(playlist))
+                Ok(ApiTrackResult::Playlist(playlist))
             }
-            UrlTarget::Album { .. } => Ok(DataType::Empty(None)),
+            UrlTarget::Album { .. } => Ok(ApiTrackResult::Empty(None)),
         }
     }
 
-    async fn stream(&self, track: &TrackInfo) -> Result<Input, ResolverError> {
+    async fn make_playable(&self, track: ApiTrackInfo) -> Result<Track, ResolverError> {
         let player = self
             .rusty_pipe
             .query()
@@ -156,6 +163,6 @@ impl Source for Youtube {
         let stream = request.create_async().await?;
         let input = Input::Live(LiveInput::Raw(stream), None);
 
-        Ok(input)
+        Ok(Track::new_with_data(input, Arc::new(track)))
     }
 }

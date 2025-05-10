@@ -9,15 +9,15 @@ use songbird::{
     Config, ConnectionInfo, CoreEvent, Driver, Event, TrackEvent,
     driver::Bitrate,
     id::{GuildId, UserId},
-    tracks::{Track, TrackHandle, TrackState},
+    tracks::{TrackHandle, TrackState},
 };
 use tokio::{sync::Mutex, task};
 
 use super::{events::PlayerEvent, manager::CleanerSender};
 use crate::{
-    Scheduler, Sources,
-    models::{Player as ApiPlayer, PlayerState, Track as ApiTrack, VoiceData},
-    util::{decoder::decode_base64, errors::PlayerError, source::Source},
+    Scheduler,
+    models::{ApiPlayer, ApiPlayerState, ApiTrack, ApiVoiceData},
+    util::{decoder::decode_base64, errors::PlayerError},
 };
 
 #[derive(Clone)]
@@ -39,14 +39,14 @@ impl Player {
         config: Option<Config>,
         user_id: UserId,
         guild_id: GuildId,
-        server_update: VoiceData,
+        server_update: ApiVoiceData,
     ) -> Result<Self, PlayerError> {
         let data = ApiPlayer {
             guild_id: guild_id.0.get(),
             track: None,
             volume: 1,
             paused: false,
-            state: PlayerState {
+            state: ApiPlayerState {
                 // todo: fix this
                 time: Instant::now().elapsed().as_secs(),
                 position: 0,
@@ -90,7 +90,7 @@ impl Player {
 
     pub async fn connect(
         &self,
-        server_update: &VoiceData,
+        server_update: &ApiVoiceData,
         config: Option<Config>,
     ) -> Result<(), PlayerError> {
         let connection = ConnectionInfo {
@@ -166,7 +166,7 @@ impl Player {
             plugin_info: serde_json::Value::Null,
         };
 
-        let track = Player::stream_and_transform(&api_track).await?;
+        let track = api_track.make_playable().await?;
 
         let mut guard = self.driver.lock().await;
 
@@ -216,18 +216,6 @@ impl Player {
         if let Some(driver) = guard.as_mut() {
             driver.stop();
         }
-    }
-
-    async fn stream_and_transform(track: &ApiTrack) -> Result<Track, PlayerError> {
-        let input = if track.info.source_name == "http" {
-            Sources.http.stream(&track.info).await?
-        } else if track.info.source_name == "youtube" {
-            Sources.youtube.stream(&track.info).await?
-        } else {
-            return Err(PlayerError::InputNotSupported);
-        };
-
-        Ok(Track::new_with_data(input, Arc::new(track.clone())))
     }
 }
 
