@@ -1,9 +1,10 @@
 use std::sync::Arc;
 
+use bytesize::ByteSize;
 use reqwest::Client;
 use rustypipe::{
     client::{ClientType, RustyPipe},
-    model::{AudioFormat, UrlTarget},
+    model::{UrlTarget, VideoPlayer},
 };
 use songbird::{
     input::{Compose, HttpRequest, Input, LiveInput},
@@ -19,6 +20,8 @@ pub struct Youtube {
     client: Client,
     rusty_pipe: RustyPipe,
     client_types: Vec<ClientType>,
+    video_itags: Vec<u32>,
+    audio_itags: Vec<u32>,
 }
 
 impl Source for Youtube {
@@ -36,8 +39,10 @@ impl Source for Youtube {
             client_types: vec![
                 ClientType::Desktop,
                 ClientType::DesktopMusic,
-                ClientType::Ios,
+                ClientType::Mobile,
             ],
+            video_itags: vec![18, 22, 37, 44, 45, 46],
+            audio_itags: vec![140, 141, 171, 250, 251],
         }
     }
 
@@ -139,30 +144,135 @@ impl Source for Youtube {
     }
 
     async fn make_playable(&self, track: ApiTrack) -> Result<Track, ResolverError> {
-        let player = self
-            .rusty_pipe
-            .query()
-            .player_from_clients(&track.info.identifier, &self.client_types)
-            .await?;
+        let player = {
+            let mut result: Option<VideoPlayer> = None;
 
-        let format = player
+            for client in &self.client_types {
+                let video = self
+                    .rusty_pipe
+                    .query()
+                    .player_from_client(&track.info.identifier, *client)
+                    .await;
+
+                let client_name = format!("Client [{}]", self.readable_client_type(client));
+
+                match video {
+                    Ok(video) => {
+                        if video.audio_streams.is_empty() && video.video_streams.is_empty() {
+                            tracing::warn!(
+                                "{} failed to get results due to: No streams available",
+                                client_name,
+                            );
+                            continue;
+                        }
+
+                        tracing::info!(
+                            "{} got results! Formats => [Audio: {:?}]  [Video: {:?}]",
+                            client_name,
+                            video
+                                .audio_streams
+                                .iter()
+                                .map(|stream| stream.itag)
+                                .collect::<Vec<u32>>(),
+                            video
+                                .video_streams
+                                .iter()
+                                .map(|stream| stream.itag)
+                                .collect::<Vec<u32>>()
+                        );
+
+                        let _ = result.insert(video);
+
+                        break;
+                    }
+                    Err(err) => {
+                        tracing::warn!(
+                            "Client {} failed to get results due to: {:?}",
+                            self.readable_client_type(client),
+                            err
+                        );
+                    }
+                }
+            }
+
+            result.ok_or(ResolverError::MissingRequiredData(
+                "Failed to resolve an Api Track",
+            ))?
+        };
+
+        let audio = player
             .audio_streams
             .iter()
-            .filter(|stream| stream.format == AudioFormat::Webm)
+            .filter(|stream| self.audio_itags.contains(&stream.itag))
             .reduce(|prev, current| {
                 if prev.bitrate > current.bitrate {
                     prev
                 } else {
                     current
                 }
-            })
-            .ok_or(ResolverError::MissingRequiredData("Audio Stream"))?;
+            });
 
-        let mut request = HttpRequest::new(self.get_client(), format.url.clone());
+        if let Some(stream) = audio {
+            tracing::info!(
+                "Picked [{}] [{} ({}/s)] for the playback",
+                stream.itag,
+                stream.mime,
+                ByteSize::b(stream.bitrate as u64).display().iec_short()
+            );
+        }
+
+        let video = player
+            .video_streams
+            .iter()
+            .filter(|stream| self.video_itags.contains(&stream.itag))
+            .reduce(|prev, current| {
+                if prev.bitrate > current.bitrate {
+                    prev
+                } else {
+                    current
+                }
+            });
+
+        if let Some(stream) = audio
+            && audio.is_none()
+        {
+            tracing::info!(
+                "Picked [{}] [{} ({}/s)] for the playback",
+                stream.itag,
+                stream.mime,
+                ByteSize::b(stream.bitrate as u64).display().iec_short()
+            );
+        }
+
+        let mut url = audio
+            .map(|stream| &stream.url)
+            .ok_or(ResolverError::MissingRequiredData("Audio Stream"));
+
+        if url.is_err() {
+            url = video
+                .map(|stream| &stream.url)
+                .ok_or(ResolverError::MissingRequiredData("Video Stream"));
+        }
+
+        let mut request = HttpRequest::new(self.get_client(), url?.clone());
 
         let stream = request.create_async().await?;
         let input = Input::Live(LiveInput::Raw(stream), None);
 
         Ok(Track::new_with_data(input, Arc::new(track)))
+    }
+}
+
+impl Youtube {
+    pub fn readable_client_type(&self, client: &ClientType) -> &'static str {
+        match client {
+            ClientType::Desktop => "Desktop",
+            ClientType::DesktopMusic => "Desktop Music",
+            ClientType::Mobile => "Mobile",
+            ClientType::Tv => "TV",
+            ClientType::Android => "Android",
+            ClientType::Ios => "IOS",
+            _ => "Unknown",
+        }
     }
 }
