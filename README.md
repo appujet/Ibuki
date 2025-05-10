@@ -1,6 +1,6 @@
 # Ibuki
 
-> A Lavalink (like) port to Rust Lang, using Songbird under the hood
+> Standalone Discord audio sending node written in Rust 
 
 <p align="center">
     <img src="https://azurlane.netojuu.com/images/thumb/2/2d/IbukiCasual.png/587px-IbukiCasual.png"> 
