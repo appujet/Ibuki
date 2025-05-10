@@ -40,7 +40,7 @@ pub trait Source {
 
     async fn resolve(&self, url: &str) -> Result<ApiTrackResult, ResolverError>;
 
-    async fn make_playable(&self, track: ApiTrackInfo) -> Result<Track, ResolverError>;
+    async fn make_playable(&self, track: ApiTrack) -> Result<Track, ResolverError>;
 }
 
 impl From<AuxMetadata> for ApiTrackInfo {
@@ -75,9 +75,9 @@ impl From<AuxMetadata> for ApiTrackInfo {
 impl ApiTrack {
     pub async fn make_playable(self) -> Result<Track, ResolverError> {
         if self.info.source_name == "http" {
-            Sources.http.make_playable(self.info).await
+            Sources.http.make_playable(self).await
         } else if self.info.source_name == "youtube" {
-            Sources.youtube.make_playable(self.info).await
+            Sources.youtube.make_playable(self).await
         } else {
             return Err(ResolverError::InputNotSupported);
         }

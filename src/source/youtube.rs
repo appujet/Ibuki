@@ -138,11 +138,11 @@ impl Source for Youtube {
         }
     }
 
-    async fn make_playable(&self, track: ApiTrackInfo) -> Result<Track, ResolverError> {
+    async fn make_playable(&self, track: ApiTrack) -> Result<Track, ResolverError> {
         let player = self
             .rusty_pipe
             .query()
-            .player_from_clients(&track.identifier, &self.client_types)
+            .player_from_clients(&track.info.identifier, &self.client_types)
             .await?;
 
         let format = player
