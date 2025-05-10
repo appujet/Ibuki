@@ -3,18 +3,23 @@ use std::time::Duration;
 use reqwest::Client;
 use songbird::input::{AuxMetadata, Input};
 
-use crate::{models::TrackInfo, source::http::Http};
+use crate::{
+    models::{DataType, TrackInfo},
+    source::{http::Http, youtube::Youtube},
+};
 
 use super::errors::ResolverError;
 
 pub struct SourceManager {
     pub http: Http,
+    pub youtube: Youtube,
 }
 
 impl SourceManager {
     pub fn new() -> Self {
         Self {
             http: Http::new(None),
+            youtube: Youtube::new(None),
         }
     }
 }
@@ -28,11 +33,11 @@ impl Default for SourceManager {
 pub trait Source {
     fn new(client: Option<Client>) -> Self;
 
-    fn valid(&self, url: String) -> bool;
-
     fn get_client(&self) -> Client;
 
-    async fn resolve(&self, url: String) -> Result<TrackInfo, ResolverError>;
+    async fn valid_url(&self, url: &str) -> bool;
+
+    async fn resolve(&self, url: &str) -> Result<DataType, ResolverError>;
 
     async fn stream(&self, track: &TrackInfo) -> Result<Input, ResolverError>;
 }

@@ -14,7 +14,11 @@ pub enum ResolverError {
     #[error("Important Data Missing: {0}")]
     MissingRequiredData(&'static str),
     #[error(transparent)]
+    Base64EncodeError(#[from] Base64EncodeError),
+    #[error(transparent)]
     AudioStream(#[from] songbird::input::AudioStreamError),
+    #[error(transparent)]
+    YoutubeError(#[from] rustypipe::error::Error),
 }
 
 #[derive(Error, Debug)]

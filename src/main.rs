@@ -7,6 +7,7 @@ use axum::{
     middleware::from_fn,
     routing, serve,
 };
+use bytesize::ByteSize;
 use cap::Cap;
 use dashmap::DashMap;
 use dlmalloc::GlobalDlmalloc;
@@ -35,7 +36,8 @@ mod voice;
 mod ws;
 
 #[global_allocator]
-static ALLOCATOR: Cap<GlobalDlmalloc> = Cap::new(GlobalDlmalloc, usize::MAX);
+static ALLOCATOR: Cap<GlobalDlmalloc> =
+    Cap::new(GlobalDlmalloc, ByteSize::mb(128).as_u64() as usize);
 #[allow(non_upper_case_globals)]
 pub static Scheduler: LazyLock<Scheduler> = LazyLock::new(Scheduler::default);
 #[allow(non_upper_case_globals)]
@@ -46,8 +48,6 @@ pub static Sources: LazyLock<SourceManager> = LazyLock::new(SourceManager::new);
 #[main(flavor = "multi_thread")]
 async fn main() {
     unsafe { set_var("RUST_BACKTRACE", "1") };
-
-    ALLOCATOR.set_limit(10 * 1024 * 1024).unwrap();
 
     dotenv().ok();
 
@@ -76,10 +76,10 @@ async fn main() {
             let limit = ALLOCATOR.limit() as u64;
 
             tracing::info!(
-                "System Memory Usage: [Used: {:.2} MB] [Free: {:.2} MB] [Limit: {:.2} MB]",
-                (used as f64 / 1048576.00),
-                (free as f64 / 1048576.00),
-                (limit as f64 / 1048576.00)
+                "Allocator Usage: [Used: {:.2}] [Free: {:.2}] [Limit: {:.2}]",
+                ByteSize::b(used).display().si(),
+                ByteSize::b(free).display().si(),
+                ByteSize::b(limit).display().si()
             );
 
             // todo: fix stats placeholder

@@ -10,7 +10,6 @@ use flume::{Sender, WeakSender, unbounded};
 use songbird::Config;
 use songbird::id::{GuildId, UserId};
 use std::sync::Arc;
-use std::sync::atomic::Ordering;
 
 pub enum CleanerSender {
     GuildId(GuildId),
@@ -19,9 +18,9 @@ pub enum CleanerSender {
 
 pub struct PlayerManager {
     pub user_id: UserId,
+    pub players: Arc<DashMap<GuildId, Player>>,
     cleaner: Sender<CleanerSender>,
     websocket: WeakSender<Message>,
-    players: Arc<DashMap<GuildId, Player>>,
 }
 
 impl PlayerManager {
@@ -48,24 +47,6 @@ impl PlayerManager {
         });
 
         manager
-    }
-
-    pub fn get_players_len(&self) -> usize {
-        self.players.len()
-    }
-
-    pub fn get_active_players_len(&self) -> usize {
-        self.players
-            .iter()
-            .map(|player| {
-                if player.active.load(Ordering::Relaxed) {
-                    1
-                } else {
-                    0
-                }
-            })
-            .reduce(|acc, number| acc + number)
-            .unwrap_or(0)
     }
 
     pub fn get_player(&self, guild_id: &GuildId) -> Option<Ref<'_, GuildId, Player>> {

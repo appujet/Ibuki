@@ -221,6 +221,8 @@ impl Player {
     async fn stream_and_transform(track: &ApiTrack) -> Result<Track, PlayerError> {
         let input = if track.info.source_name == "http" {
             Sources.http.stream(&track.info).await?
+        } else if track.info.source_name == "youtube" {
+            Sources.youtube.stream(&track.info).await?
         } else {
             return Err(PlayerError::InputNotSupported);
         };

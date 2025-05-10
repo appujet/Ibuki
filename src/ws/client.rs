@@ -27,7 +27,7 @@ pub struct WebsocketRequestData {
 pub struct WebsocketClient {
     pub user_id: UserId,
     pub session_id: u128,
-    pub player_manager: Arc<PlayerManager>,
+    pub player_manager: PlayerManager,
     message_sender: Sender<Message>,
     message_receiver: Receiver<Message>,
     handles: Vec<JoinHandle<()>>,
@@ -37,7 +37,7 @@ impl WebsocketClient {
     pub fn new(user_id: UserId) -> Self {
         let session_id = Uuid::new_v4().as_u128();
         let (message_sender, message_receiver) = unbounded::<Message>();
-        let player_manager = Arc::new(PlayerManager::new(message_sender.downgrade(), user_id));
+        let player_manager = PlayerManager::new(message_sender.downgrade(), user_id);
 
         Self {
             user_id,
@@ -98,9 +98,10 @@ impl WebsocketClient {
 
         // incoming message handler
         let dropped = ptr.clone();
-        let manager = self.player_manager.clone();
         let message_sender = self.message_sender.clone();
         let user_id = self.user_id.to_owned();
+        let players = self.player_manager.players.clone();
+
         let receive_handle = tokio::spawn(async move {
             while let Some(Ok(message)) = receiver.next().await {
                 if let Message::Close(close_frame) = message {
@@ -131,18 +132,11 @@ impl WebsocketClient {
 
             sleep(duration).await;
 
-            let connections = manager.get_players_len();
-            let players = manager.get_active_players_len();
-
-            manager.disconnect_all();
+            players.clear();
 
             Clients.remove(&user_id);
 
-            tracing::info!(
-                "Cleaned up {} connection(s) and {} player(s)",
-                connections,
-                players
-            );
+            tracing::info!("Cleaned up websocket client for [UserId {}]", user_id);
         });
 
         self.handles.push(receive_handle);
@@ -150,6 +144,7 @@ impl WebsocketClient {
         // message sender handler
         let queue = self.message_receiver.clone();
         let dropped = ptr.clone();
+
         let send_handle = tokio::spawn(async move {
             while let Ok(message) = queue.recv_async().await {
                 if dropped.load(Ordering::Acquire) {

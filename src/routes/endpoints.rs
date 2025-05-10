@@ -1,13 +1,11 @@
 use std::num::NonZeroU64;
 
 use super::{DecodeQueryString, EncodeQueryString, PlayerMethodsPath};
-use crate::models::{
-    DataType, Player, PlayerOptions, PlayerState, Track as IbukiTrack, TrackInfo, VoiceData,
-};
+use crate::models::{DataType, Player, PlayerOptions, PlayerState, Track as IbukiTrack, VoiceData};
 use crate::util::converter::numbers::IbukiGuildId;
+use crate::util::decoder::decode_base64;
 use crate::util::errors::EndpointError;
 use crate::util::source::Source;
-use crate::util::{decoder::decode_base64, encoder::encode_base64};
 use crate::{Clients, Sources};
 use axum::Json;
 use axum::extract::Path;
@@ -70,6 +68,8 @@ pub async fn update_player(
     }): Path<PlayerMethodsPath>,
     Json(update_player): Json<PlayerOptions>,
 ) -> Result<Response<Body>, EndpointError> {
+    tracing::info!("Got an update player request");
+
     let client = Clients
         .iter()
         .find(|client| client.session_id == session_id)
@@ -168,33 +168,20 @@ pub async fn decode(query: Query<DecodeQueryString>) -> Result<Response<Body>, E
 
 #[tracing::instrument]
 pub async fn encode(query: Query<EncodeQueryString>) -> Result<Response<Body>, EndpointError> {
-    let track: Option<TrackInfo> = {
-        let mut result = None;
-
-        if Sources.http.valid(query.identifier.clone()) {
-            result = Some(Sources.http.resolve(query.identifier.clone()).await?)
+    let track: DataType = {
+        let mut result = DataType::Empty(None);
+        if Sources.youtube.valid_url(&query.identifier).await {
+            result = Sources.youtube.resolve(&query.identifier).await?;
+        } else if Sources.http.valid_url(&query.identifier).await {
+            result = Sources.http.resolve(&query.identifier).await?;
         }
 
         result
     };
 
-    let Some(track) = track else {
-        let data = DataType::Empty(None);
-        let string = serde_json::to_string_pretty(&data)?;
+    tracing::info!("Got a encode request! Data: {:?}", &track);
 
-        return Ok(Response::new(Body::from(string)));
-    };
-
-    let encoded = encode_base64(&track)?;
-    let track = IbukiTrack {
-        encoded,
-        info: track,
-        plugin_info: serde_json::Value::Null,
-    };
-
-    let data = DataType::Track(track);
-
-    let string = serde_json::to_string_pretty(&data)?;
+    let string = serde_json::to_string_pretty(&track)?;
 
     return Ok(Response::new(Body::from(string)));
 }
