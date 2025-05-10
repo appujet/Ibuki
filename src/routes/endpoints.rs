@@ -1,9 +1,7 @@
 use std::num::NonZeroU64;
 
 use super::{DecodeQueryString, EncodeQueryString, PlayerMethodsPath};
-use crate::models::{
-    ApiPlayer, ApiPlayerOptions, ApiPlayerState, ApiTrack, ApiTrackResult, ApiVoiceData,
-};
+use crate::models::{ApiPlayerOptions, ApiTrack, ApiTrackResult};
 use crate::util::converter::numbers::IbukiGuildId;
 use crate::util::decoder::decode_base64;
 use crate::util::errors::EndpointError;
@@ -30,33 +28,12 @@ pub async fn get_player(
 
     let id = GuildId::from(NonZeroU64::try_from(IbukiGuildId(guild_id))?);
 
-    let _ = client
+    let player = client
         .player_manager
         .get_player(&id)
         .ok_or(EndpointError::NotFound)?;
 
-    let player = ApiPlayer {
-        guild_id: id.0.get(),
-        track: None,
-        volume: 1,
-        paused: false,
-        state: ApiPlayerState {
-            time: 0,
-            position: 0,
-            connected: true,
-            ping: None,
-        },
-        voice: ApiVoiceData {
-            token: "Placeholder".into(),
-            endpoint: "Placeholder".into(),
-            session_id: "Placeholder".into(),
-            connected: None,
-            ping: None,
-        },
-        filters: Value::Object(serde_json::Map::new()),
-    };
-
-    let string = serde_json::to_string_pretty(&player)?;
+    let string = serde_json::to_string_pretty(&*player.data.lock().await)?;
 
     Ok(Response::new(Body::from(string)))
 }
@@ -70,8 +47,6 @@ pub async fn update_player(
     }): Path<PlayerMethodsPath>,
     Json(update_player): Json<ApiPlayerOptions>,
 ) -> Result<Response<Body>, EndpointError> {
-    tracing::info!("Got an update player request");
-
     let client = Clients
         .iter()
         .find(|client| client.session_id == session_id)
@@ -107,28 +82,7 @@ pub async fn update_player(
         }
     }
 
-    let player = ApiPlayer {
-        guild_id: id.0.get(),
-        track: None,
-        volume: 1,
-        paused: false,
-        state: ApiPlayerState {
-            time: 0,
-            position: 0,
-            connected: true,
-            ping: None,
-        },
-        voice: ApiVoiceData {
-            token: "Placeholder".into(),
-            endpoint: "Placeholder".into(),
-            session_id: "Placeholder".into(),
-            connected: None,
-            ping: None,
-        },
-        filters: Value::Object(serde_json::Map::new()),
-    };
-
-    let string = serde_json::to_string_pretty(&player)?;
+    let string = serde_json::to_string_pretty(&*player.data.lock().await)?;
 
     Ok(Response::new(Body::from(string)))
 }
@@ -180,8 +134,6 @@ pub async fn encode(query: Query<EncodeQueryString>) -> Result<Response<Body>, E
 
         result
     };
-
-    tracing::info!("Got a encode request! Data: {:?}", &track);
 
     let string = serde_json::to_string_pretty(&track)?;
 
