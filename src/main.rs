@@ -14,6 +14,7 @@ use dlmalloc::GlobalDlmalloc;
 use dotenv::dotenv;
 use models::{ApiCpu, ApiMemory, ApiNodeMessage, ApiStats};
 use songbird::{driver::Scheduler, id::UserId};
+use source::{http::Http, youtube::Youtube};
 use std::sync::LazyLock;
 use std::{env::set_var, net::SocketAddr};
 use tokio::{
@@ -24,7 +25,7 @@ use tokio::{
 use tower::ServiceBuilder;
 use tracing::Level;
 use tracing_subscriber::fmt;
-use util::source::SourceManager;
+use util::source::{Source, Sources};
 
 mod constants;
 mod middlewares;
@@ -43,7 +44,7 @@ pub static Scheduler: LazyLock<Scheduler> = LazyLock::new(Scheduler::default);
 #[allow(non_upper_case_globals)]
 pub static Clients: LazyLock<DashMap<UserId, WebsocketClient>> = LazyLock::new(DashMap::new);
 #[allow(non_upper_case_globals)]
-pub static Sources: LazyLock<SourceManager> = LazyLock::new(SourceManager::new);
+pub static AvailableSources: LazyLock<DashMap<String, Sources>> = LazyLock::new(DashMap::new);
 
 #[main(flavor = "multi_thread")]
 async fn main() {
@@ -64,6 +65,18 @@ async fn main() {
     tracing::subscriber::set_global_default(subscriber).expect("Failed to set global logger");
 
     LazyLock::force(&Clients);
+    LazyLock::force(&AvailableSources);
+
+    let src_name = String::from("Youtube");
+    AvailableSources.insert(
+        src_name.to_lowercase(),
+        Sources::Youtube(Youtube::new(None)),
+    );
+    tracing::info!("Registered [{}] into sources list", src_name);
+
+    let src_name = String::from("HTTP");
+    AvailableSources.insert(src_name.to_lowercase(), Sources::Http(Http::new(None)));
+    tracing::info!("Registered [{}] into sources list", src_name);
 
     tokio::spawn(async move {
         let mut interval = interval(Duration::from_secs(30));

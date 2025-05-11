@@ -4,7 +4,8 @@ use bytesize::ByteSize;
 use reqwest::Client;
 use rustypipe::{
     client::{ClientType, RustyPipe},
-    model::{UrlTarget, VideoPlayer},
+    model::{UrlTarget, VideoPlayer, YouTubeItem},
+    param::search_filter::{ItemType, SearchFilter},
 };
 use songbird::{
     input::{Compose, HttpRequest, Input, LiveInput},
@@ -46,12 +47,117 @@ impl Source for Youtube {
         }
     }
 
+    fn get_name(&self) -> &'static str {
+        "youtube"
+    }
+
     fn get_client(&self) -> Client {
         self.client.clone()
     }
 
     async fn valid_url(&self, url: &str) -> bool {
         self.rusty_pipe.query().resolve_url(url, true).await.is_ok()
+    }
+
+    async fn try_search(&self, query: &str) -> bool {
+        query.starts_with("ytsearch") || query.starts_with("ytmsearch")
+    }
+
+    async fn search(&self, query: &str) -> Result<ApiTrackResult, ResolverError> {
+        let term = query
+            .strip_prefix("ytsearch")
+            .or(query.strip_prefix("ytmsearch"))
+            .ok_or(ResolverError::InputNotSupported)?;
+
+        let (prefix, _) = query.split_at(query.len() - term.len());
+
+        match prefix {
+            "ytsearch" => {
+                let filter = SearchFilter::new().item_type(ItemType::Video);
+
+                let results = self
+                    .rusty_pipe
+                    .query()
+                    .search_filter::<YouTubeItem, _>(query, &filter)
+                    .await?;
+
+                let mut tracks = Vec::new();
+
+                for result in results.items.items {
+                    match result {
+                        YouTubeItem::Video(video) => {
+                            let info = ApiTrackInfo {
+                                identifier: video.id.to_owned(),
+                                is_seekable: !video.is_live,
+                                author: video
+                                    .channel
+                                    .map(|channel| channel.name)
+                                    .unwrap_or(String::from("Unknown")),
+                                length: video.duration.unwrap_or(u32::MAX) as u64,
+                                is_stream: video.is_live,
+                                position: 0,
+                                title: video.name,
+                                uri: Some(format!("https://www.youtube.com/watch?{}", video.id)),
+                                artwork_url: video
+                                    .thumbnail
+                                    .first()
+                                    .map(|data| data.url.to_owned()),
+                                isrc: None,
+                                source_name: self.get_name().into(),
+                            };
+
+                            let track = ApiTrack {
+                                encoded: encode_base64(&info)?,
+                                info,
+                                plugin_info: serde_json::Value::Null,
+                            };
+
+                            tracks.push(track);
+                        }
+                        _ => return Err(ResolverError::MissingRequiredData("Video Item")),
+                    }
+                }
+
+                Ok(ApiTrackResult::Search(tracks))
+            }
+
+            "ytmsearch" => {
+                let results = self.rusty_pipe.query().music_search_videos(query).await?;
+
+                let mut tracks = Vec::new();
+
+                for result in results.items.items {
+                    let info = ApiTrackInfo {
+                        identifier: result.id.to_owned(),
+                        is_seekable: true,
+                        author: result
+                            .artists
+                            .first()
+                            .map(|artist| artist.name.to_owned())
+                            .unwrap_or(String::from("Unknown")),
+                        length: result.duration.unwrap_or(0) as u64,
+                        is_stream: result.duration.map(|_| true).unwrap_or(false),
+                        position: 0,
+                        title: result.name,
+                        uri: Some(format!("https://music.youtube.com/watch?v={}", result.id)),
+                        artwork_url: result.cover.first().map(|data| data.url.to_owned()),
+                        isrc: None,
+                        source_name: self.get_name().into(),
+                    };
+
+                    let track = ApiTrack {
+                        encoded: encode_base64(&info)?,
+                        info,
+                        plugin_info: serde_json::Value::Null,
+                    };
+
+                    tracks.push(track);
+                }
+
+                Ok(ApiTrackResult::Search(tracks))
+            }
+            _ => Err(ResolverError::InputNotSupported),
+        }
     }
 
     async fn resolve(&self, url: &str) -> Result<ApiTrackResult, ResolverError> {
@@ -61,21 +167,22 @@ impl Source for Youtube {
 
         match request {
             UrlTarget::Video { id, .. } => {
-                let metadata = self.rusty_pipe.query().video_details(&id).await?;
+                let player = self.rusty_pipe.query().player(&id).await?;
+
+                let metadata = player.details;
 
                 let info = ApiTrackInfo {
                     identifier: id.to_owned(),
                     is_seekable: !metadata.is_live,
-                    author: metadata.channel.name,
-                    // todo: decide on this
-                    length: u64::MAX,
+                    author: metadata.channel_name.unwrap_or(String::from("Unknown")),
+                    length: metadata.duration as u64,
                     is_stream: metadata.is_live,
                     position: 0,
-                    title: metadata.name,
+                    title: metadata.name.unwrap_or(String::from("Unknown")),
                     uri: Some(request_url),
-                    artwork_url: None,
+                    artwork_url: metadata.thumbnail.first().map(|data| data.url.to_owned()),
                     isrc: None,
-                    source_name: String::from("youtube"),
+                    source_name: self.get_name().into(),
                 };
 
                 let track = ApiTrack {
@@ -125,7 +232,7 @@ impl Source for Youtube {
                         uri: Some(url.to_url()),
                         artwork_url: video.thumbnail.first().map(|data| data.url.to_owned()),
                         isrc: None,
-                        source_name: String::from("youtube"),
+                        source_name: self.get_name().into(),
                     };
 
                     let track = ApiTrack {
@@ -167,18 +274,10 @@ impl Source for Youtube {
                         }
 
                         tracing::info!(
-                            "{} got results! Formats => [Audio: {:?}]  [Video: {:?}]",
+                            "{} got results! Formats Count => [Audio: {}]  [Video: {}]",
                             client_name,
-                            video
-                                .audio_streams
-                                .iter()
-                                .map(|stream| stream.itag)
-                                .collect::<Vec<u32>>(),
-                            video
-                                .video_streams
-                                .iter()
-                                .map(|stream| stream.itag)
-                                .collect::<Vec<u32>>()
+                            video.audio_streams.len(),
+                            video.video_streams.len()
                         );
 
                         let _ = result.insert(video);
@@ -186,11 +285,7 @@ impl Source for Youtube {
                         break;
                     }
                     Err(err) => {
-                        tracing::warn!(
-                            "Client {} failed to get results due to: {:?}",
-                            self.readable_client_type(client),
-                            err
-                        );
+                        tracing::warn!("{} failed to get results due to: {:?}", client_name, err);
                     }
                 }
             }
@@ -244,17 +339,17 @@ impl Source for Youtube {
             );
         }
 
-        let mut url = audio
-            .map(|stream| &stream.url)
-            .ok_or(ResolverError::MissingRequiredData("Audio Stream"));
+        let mut url = audio.map(|stream| &stream.url);
 
-        if url.is_err() {
-            url = video
-                .map(|stream| &stream.url)
-                .ok_or(ResolverError::MissingRequiredData("Video Stream"));
+        if url.is_none() {
+            url = video.map(|stream| &stream.url);
         }
 
-        let mut request = HttpRequest::new(self.get_client(), url?.clone());
+        let mut request = HttpRequest::new(
+            self.get_client(),
+            url.ok_or(ResolverError::MissingRequiredData("Stream to Play"))?
+                .clone(),
+        );
 
         let stream = request.create_async().await?;
         let input = Input::Live(LiveInput::Raw(stream), None);

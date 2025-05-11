@@ -19,6 +19,10 @@ pub enum ResolverError {
     AudioStream(#[from] songbird::input::AudioStreamError),
     #[error(transparent)]
     YoutubeError(#[from] rustypipe::error::Error),
+    #[error(transparent)]
+    ReqwestError(#[from] reqwest::Error),
+    #[error(transparent)]
+    ToStr(#[from] reqwest::header::ToStrError),
     #[error("The track provided is not supported")]
     InputNotSupported,
 }

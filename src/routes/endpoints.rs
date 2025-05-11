@@ -1,12 +1,13 @@
 use std::num::NonZeroU64;
+use std::ops::ControlFlow;
 
 use super::{DecodeQueryString, EncodeQueryString, PlayerMethodsPath};
 use crate::models::{ApiPlayerOptions, ApiTrack, ApiTrackResult};
 use crate::util::converter::numbers::IbukiGuildId;
 use crate::util::decoder::decode_base64;
 use crate::util::errors::EndpointError;
-use crate::util::source::Source;
-use crate::{Clients, Sources};
+use crate::util::source::{Source, Sources};
+use crate::{AvailableSources, Clients};
 use axum::Json;
 use axum::extract::Path;
 use axum::{body::Body, extract::Query, response::Response};
@@ -126,10 +127,31 @@ pub async fn decode(query: Query<DecodeQueryString>) -> Result<Response<Body>, E
 pub async fn encode(query: Query<EncodeQueryString>) -> Result<Response<Body>, EndpointError> {
     let track: ApiTrackResult = {
         let mut result = ApiTrackResult::Empty(None);
-        if Sources.youtube.valid_url(&query.identifier).await {
-            result = Sources.youtube.resolve(&query.identifier).await?;
-        } else if Sources.http.valid_url(&query.identifier).await {
-            result = Sources.http.resolve(&query.identifier).await?;
+
+        for source in AvailableSources.iter() {
+            let mut control: ControlFlow<(), ()> = ControlFlow::Continue(());
+
+            match source.value() {
+                Sources::Youtube(src) => {
+                    if src.try_search(&query.identifier).await {
+                        result = src.search(&query.identifier).await?;
+                        control = ControlFlow::Break(());
+                    } else if src.valid_url(&query.identifier).await {
+                        result = src.resolve(&query.identifier).await?;
+                        control = ControlFlow::Break(());
+                    }
+                }
+                Sources::Http(src) => {
+                    if src.valid_url(&query.identifier).await {
+                        result = src.resolve(&query.identifier).await?;
+                        control = ControlFlow::Break(());
+                    }
+                }
+            }
+
+            if let ControlFlow::Break(()) = control {
+                break;
+            }
         }
 
         result
