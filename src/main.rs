@@ -156,7 +156,8 @@ async fn main() {
         .route_layer(
             ServiceBuilder::new()
                 .layer(from_fn(middlewares::version::check))
-                .layer(from_fn(middlewares::auth::authenticate)),
+                .layer(from_fn(middlewares::auth::authenticate))
+                .layer(from_fn(middlewares::log::request)),
         )
         .route("/", routing::get(routes::global::landing));
 

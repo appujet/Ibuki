@@ -9,8 +9,6 @@ use axum::{
 
 use crate::{constants::VERSION, util::errors::EndpointError};
 
-// todo: improve this in future
-
 pub async fn check(
     Path(params): Path<HashMap<String, String>>,
     request: Request,

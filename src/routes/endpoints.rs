@@ -1,7 +1,4 @@
-use std::num::NonZeroU64;
-use std::ops::ControlFlow;
-
-use super::{DecodeQueryString, EncodeQueryString, PlayerMethodsPath};
+use super::{DecodeQueryString, EncodeQueryString, PlayerMethodsPath, PlayerUpdateQuery};
 use crate::models::{ApiPlayerOptions, ApiTrack, ApiTrackResult};
 use crate::util::converter::numbers::IbukiGuildId;
 use crate::util::decoder::decode_base64;
@@ -13,11 +10,11 @@ use axum::extract::Path;
 use axum::{body::Body, extract::Query, response::Response};
 use serde_json::Value;
 use songbird::id::GuildId;
+use std::num::NonZeroU64;
+use std::ops::ControlFlow;
 
-#[tracing::instrument]
 pub async fn get_player(
     Path(PlayerMethodsPath {
-        version,
         session_id,
         guild_id,
     }): Path<PlayerMethodsPath>,
@@ -39,10 +36,9 @@ pub async fn get_player(
     Ok(Response::new(Body::from(string)))
 }
 
-#[tracing::instrument]
 pub async fn update_player(
+    query: Query<PlayerUpdateQuery>,
     Path(PlayerMethodsPath {
-        version,
         session_id,
         guild_id,
     }): Path<PlayerMethodsPath>,
@@ -71,7 +67,9 @@ pub async fn update_player(
         .get_player(&id)
         .ok_or(EndpointError::NotFound)?;
 
-    if let Some(Some(encoded)) = update_player.track.map(|track| track.encoded) {
+    if let Some(Some(encoded)) = update_player.track.map(|track| track.encoded)
+        && !query.no_replace
+    {
         match encoded {
             Value::Null => {
                 player.stop().await;
@@ -83,6 +81,14 @@ pub async fn update_player(
         }
     }
 
+    if let Some(pause) = update_player.paused {
+        player.pause(pause).await;
+    }
+
+    if let Some(position) = update_player.position {
+        player.seek(position).await;
+    }
+
     let string = serde_json::to_string_pretty(&*player.data.lock().await)?;
 
     Ok(Response::new(Body::from(string)))
@@ -91,7 +97,6 @@ pub async fn update_player(
 #[tracing::instrument]
 pub async fn destroy_player(
     Path(PlayerMethodsPath {
-        version,
         session_id,
         guild_id,
     }): Path<PlayerMethodsPath>,
@@ -108,7 +113,6 @@ pub async fn destroy_player(
     Ok(Response::new(Body::from(())))
 }
 
-#[tracing::instrument]
 pub async fn decode(query: Query<DecodeQueryString>) -> Result<Response<Body>, EndpointError> {
     let track = decode_base64(&query.track)?;
 
@@ -123,7 +127,6 @@ pub async fn decode(query: Query<DecodeQueryString>) -> Result<Response<Body>, E
     Ok(Response::new(Body::from(string)))
 }
 
-#[tracing::instrument]
 pub async fn encode(query: Query<EncodeQueryString>) -> Result<Response<Body>, EndpointError> {
     let track: ApiTrackResult = {
         let mut result = ApiTrackResult::Empty(None);
@@ -159,5 +162,5 @@ pub async fn encode(query: Query<EncodeQueryString>) -> Result<Response<Body>, E
 
     let string = serde_json::to_string_pretty(&track)?;
 
-    return Ok(Response::new(Body::from(string)));
+    Ok(Response::new(Body::from(string)))
 }

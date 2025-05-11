@@ -213,8 +213,95 @@ impl Player {
     pub async fn stop(&self) {
         let mut guard = self.driver.lock().await;
 
-        if let Some(driver) = guard.as_mut() {
-            driver.stop();
+        let Some(driver) = guard.as_mut() else {
+            return;
+        };
+
+        driver.stop();
+    }
+
+    pub async fn seek(&self, position: u32) {
+        let guard = self.data.lock().await;
+
+        if guard.state.position == position
+            || guard
+                .track
+                .as_ref()
+                .is_some_and(|track| track.info.length < position as u64)
+        {
+            return;
+        }
+
+        drop(guard);
+
+        let guard = self.handle.lock().await;
+
+        let Some(handle) = guard.as_ref() else {
+            return;
+        };
+
+        let result = handle
+            .seek_async(Duration::from_millis(position as u64))
+            .await;
+
+        drop(guard);
+
+        if result.is_ok() {
+            let mut guard = self.data.lock().await;
+
+            guard.state.position = position;
+        }
+    }
+
+    pub async fn pause(&self, pause: bool) {
+        let guard = self.data.lock().await;
+
+        let paused = guard.paused;
+
+        if paused == pause {
+            return;
+        }
+
+        drop(guard);
+
+        let guard = self.handle.lock().await;
+
+        let Some(handle) = guard.as_ref() else {
+            return;
+        };
+
+        let is_ok = {
+            if !paused {
+                handle.pause().is_ok()
+            } else {
+                handle.play().is_ok()
+            }
+        };
+
+        if !is_ok {
+            return;
+        }
+
+        drop(guard);
+
+        let mut guard = self.data.lock().await;
+
+        guard.paused = pause;
+    }
+
+    pub async fn set_volume(&self, volume: f32) {
+        let guard = self.handle.lock().await;
+
+        let Some(handle) = guard.as_ref() else {
+            return;
+        };
+
+        if handle.set_volume(volume).is_ok() {
+            drop(guard);
+
+            let mut guard = self.data.lock().await;
+
+            guard.volume = volume as u32;
         }
     }
 }
