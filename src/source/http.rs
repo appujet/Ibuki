@@ -7,7 +7,7 @@ use songbird::{
 };
 
 use crate::{
-    models::{ApiTrack, ApiTrackInfo, ApiTrackResult},
+    models::{ApiTrack, ApiTrackInfo, ApiTrackResult, Empty},
     util::{encoder::encode_base64, errors::ResolverError, source::Source},
 };
 
@@ -71,7 +71,7 @@ impl Source for Http {
         let track = ApiTrack {
             encoded: encode_base64(&info)?,
             info,
-            plugin_info: serde_json::Value::Null,
+            plugin_info: Empty,
         };
 
         Ok(ApiTrackResult::Track(track))

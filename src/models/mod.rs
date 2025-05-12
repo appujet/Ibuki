@@ -47,8 +47,11 @@ pub enum ApiTrackResult {
     Playlist(ApiTrackPlaylist),
     Search(Vec<ApiTrack>),
     Error(ApiTrackLoadException),
-    Empty(Option<Value>),
+    Empty(Option<Empty>),
 }
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Empty;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -61,7 +64,7 @@ pub struct ApiPlaylistInfo {
 #[serde(rename_all = "camelCase")]
 pub struct ApiTrackPlaylist {
     pub info: ApiPlaylistInfo,
-    pub plugin_info: Value,
+    pub plugin_info: Empty,
     pub tracks: Vec<ApiTrack>,
 }
 
@@ -102,7 +105,7 @@ pub struct ApiPlayer {
     pub paused: bool,
     pub state: ApiPlayerState,
     pub voice: ApiVoiceData,
-    pub filters: Value,
+    pub filters: Empty,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -126,7 +129,7 @@ pub struct ApiTrackInfo {
 pub struct ApiTrack {
     pub encoded: String,
     pub info: ApiTrackInfo,
-    pub plugin_info: Value,
+    pub plugin_info: Empty,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

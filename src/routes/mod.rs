@@ -12,7 +12,7 @@ pub struct PlayerMethodsPath {
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayerUpdateQuery {
-    pub no_replace: bool,
+    pub no_replace: Option<bool>,
 }
 
 #[derive(Deserialize, Debug)]

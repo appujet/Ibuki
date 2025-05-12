@@ -20,7 +20,7 @@ use std::{env::set_var, net::SocketAddr};
 use tokio::{
     main, net,
     task::JoinSet,
-    time::{Duration, interval},
+    time::{Duration, Instant, interval},
 };
 use tower::ServiceBuilder;
 use tracing::Level;
@@ -45,6 +45,8 @@ pub static Scheduler: LazyLock<Scheduler> = LazyLock::new(Scheduler::default);
 pub static Clients: LazyLock<DashMap<UserId, WebsocketClient>> = LazyLock::new(DashMap::new);
 #[allow(non_upper_case_globals)]
 pub static AvailableSources: LazyLock<DashMap<String, Sources>> = LazyLock::new(DashMap::new);
+#[allow(non_upper_case_globals)]
+pub static Start: LazyLock<Instant> = LazyLock::new(Instant::now);
 
 #[main(flavor = "multi_thread")]
 async fn main() {
@@ -66,6 +68,7 @@ async fn main() {
 
     LazyLock::force(&Clients);
     LazyLock::force(&AvailableSources);
+    LazyLock::force(&Start);
 
     let src_name = String::from("Youtube");
     AvailableSources.insert(
@@ -78,38 +81,56 @@ async fn main() {
     AvailableSources.insert(src_name.to_lowercase(), Sources::Http(Http::new(None)));
     tracing::info!("Registered [{}] into sources list", src_name);
 
+    let mut stat = perf_monitor::cpu::ProcessStat::cur().unwrap();
+    let cores = perf_monitor::cpu::processor_numbers().unwrap();
+
     tokio::spawn(async move {
         let mut interval = interval(Duration::from_secs(30));
 
         loop {
             interval.tick().await;
 
+            let Ok(process_memory_info) = perf_monitor::mem::get_process_memory_info() else {
+                continue;
+            };
+
+            let Ok(usage) = stat.cpu() else {
+                continue;
+            };
+
             let used = ALLOCATOR.allocated() as u64;
             let free = ALLOCATOR.remaining() as u64;
             let limit = ALLOCATOR.limit() as u64;
 
             tracing::info!(
-                "Allocator Usage: [Used: {:.2}] [Free: {:.2}] [Limit: {:.2}]",
+                "Memory Usage: (Heap => [Used: {:.2}] [Free: {:.2}] [Limit: {:.2}]) (RSS => [{:.2}]) (VM => [{:.2}])",
                 ByteSize::b(used).display().si(),
                 ByteSize::b(free).display().si(),
-                ByteSize::b(limit).display().si()
+                ByteSize::b(limit).display().si(),
+                ByteSize::b(process_memory_info.resident_set_size)
+                    .display()
+                    .si(),
+                ByteSize::b(process_memory_info.virtual_memory_size)
+                    .display()
+                    .si(),
             );
 
-            // todo: fix stats placeholder
             let stats = ApiStats {
                 players: Scheduler.total_tasks() as u32,
                 playing_players: Scheduler.live_tasks() as u32,
-                uptime: 0,
+                uptime: Start.elapsed().as_millis() as u64,
+                // todo: api memory is wip
                 memory: ApiMemory {
                     free,
                     used,
-                    allocated: 0,
-                    reservable: 0,
+                    allocated: process_memory_info.resident_set_size,
+                    reservable: process_memory_info.virtual_memory_size,
                 },
+                // todo: get actual system load later
                 cpu: ApiCpu {
-                    cores: 0,
-                    system_load: 0.0,
-                    lavalink_load: 0.0,
+                    cores: cores as u32,
+                    system_load: usage,
+                    lavalink_load: usage,
                 },
                 frame_stats: None,
             };

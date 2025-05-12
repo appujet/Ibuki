@@ -16,7 +16,7 @@ use tokio::{sync::Mutex, task};
 use super::{events::PlayerEvent, manager::CleanerSender};
 use crate::{
     Scheduler,
-    models::{ApiPlayer, ApiPlayerState, ApiTrack, ApiVoiceData},
+    models::{ApiPlayer, ApiPlayerState, ApiTrack, ApiVoiceData, Empty},
     util::{decoder::decode_base64, errors::PlayerError},
 };
 
@@ -54,7 +54,7 @@ impl Player {
                 ping: None,
             },
             voice: server_update.clone(),
-            filters: serde_json::Value::Object(serde_json::Map::new()),
+            filters: Empty,
         };
 
         let active = Arc::new(AtomicBool::new(false));
@@ -163,7 +163,7 @@ impl Player {
         let api_track = ApiTrack {
             encoded,
             info,
-            plugin_info: serde_json::Value::Null,
+            plugin_info: Empty,
         };
 
         let track = api_track.make_playable().await?;

@@ -13,7 +13,7 @@ use songbird::{
 };
 
 use crate::{
-    models::{ApiPlaylistInfo, ApiTrack, ApiTrackInfo, ApiTrackPlaylist, ApiTrackResult},
+    models::{ApiPlaylistInfo, ApiTrack, ApiTrackInfo, ApiTrackPlaylist, ApiTrackResult, Empty},
     util::{encoder::encode_base64, errors::ResolverError, source::Source},
 };
 
@@ -109,7 +109,7 @@ impl Source for Youtube {
                             let track = ApiTrack {
                                 encoded: encode_base64(&info)?,
                                 info,
-                                plugin_info: serde_json::Value::Null,
+                                plugin_info: Empty,
                             };
 
                             tracks.push(track);
@@ -148,7 +148,7 @@ impl Source for Youtube {
                     let track = ApiTrack {
                         encoded: encode_base64(&info)?,
                         info,
-                        plugin_info: serde_json::Value::Null,
+                        plugin_info: Empty,
                     };
 
                     tracks.push(track);
@@ -175,7 +175,7 @@ impl Source for Youtube {
                     identifier: id.to_owned(),
                     is_seekable: !metadata.is_live,
                     author: metadata.channel_name.unwrap_or(String::from("Unknown")),
-                    length: metadata.duration as u64,
+                    length: (metadata.duration * 1000) as u64,
                     is_stream: metadata.is_live,
                     position: 0,
                     title: metadata.name.unwrap_or(String::from("Unknown")),
@@ -188,7 +188,7 @@ impl Source for Youtube {
                 let track = ApiTrack {
                     encoded: encode_base64(&info)?,
                     info,
-                    plugin_info: serde_json::Value::Null,
+                    plugin_info: Empty,
                 };
 
                 Ok(ApiTrackResult::Track(track))
@@ -202,7 +202,7 @@ impl Source for Youtube {
                         name: metadata.name,
                         selected_track: 0,
                     },
-                    plugin_info: serde_json::Value::Null,
+                    plugin_info: Empty,
                     tracks: Vec::new(),
                 };
 
@@ -238,7 +238,7 @@ impl Source for Youtube {
                     let track = ApiTrack {
                         encoded: encode_base64(&info)?,
                         info,
-                        plugin_info: serde_json::Value::Null,
+                        plugin_info: Empty,
                     };
 
                     playlist.tracks.push(track);

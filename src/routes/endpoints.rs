@@ -1,5 +1,5 @@
 use super::{DecodeQueryString, EncodeQueryString, PlayerMethodsPath, PlayerUpdateQuery};
-use crate::models::{ApiPlayerOptions, ApiTrack, ApiTrackResult};
+use crate::models::{ApiPlayerOptions, ApiTrack, ApiTrackResult, Empty};
 use crate::util::converter::numbers::IbukiGuildId;
 use crate::util::decoder::decode_base64;
 use crate::util::errors::EndpointError;
@@ -68,7 +68,7 @@ pub async fn update_player(
         .ok_or(EndpointError::NotFound)?;
 
     if let Some(Some(encoded)) = update_player.track.map(|track| track.encoded)
-        && !query.no_replace
+        && !query.no_replace.unwrap_or(false)
     {
         match encoded {
             Value::Null => {
@@ -119,7 +119,7 @@ pub async fn decode(query: Query<DecodeQueryString>) -> Result<Response<Body>, E
     let track = ApiTrack {
         encoded: query.track.clone(),
         info: track,
-        plugin_info: serde_json::Value::Null,
+        plugin_info: Empty,
     };
 
     let string = serde_json::to_string_pretty(&track)?;
@@ -127,6 +127,7 @@ pub async fn decode(query: Query<DecodeQueryString>) -> Result<Response<Body>, E
     Ok(Response::new(Body::from(string)))
 }
 
+#[tracing::instrument]
 pub async fn encode(query: Query<EncodeQueryString>) -> Result<Response<Body>, EndpointError> {
     let track: ApiTrackResult = {
         let mut result = ApiTrackResult::Empty(None);
@@ -138,15 +139,18 @@ pub async fn encode(query: Query<EncodeQueryString>) -> Result<Response<Body>, E
                 Sources::Youtube(src) => {
                     if src.try_search(&query.identifier).await {
                         result = src.search(&query.identifier).await?;
+
                         control = ControlFlow::Break(());
                     } else if src.valid_url(&query.identifier).await {
                         result = src.resolve(&query.identifier).await?;
+
                         control = ControlFlow::Break(());
                     }
                 }
                 Sources::Http(src) => {
                     if src.valid_url(&query.identifier).await {
                         result = src.resolve(&query.identifier).await?;
+
                         control = ControlFlow::Break(());
                     }
                 }
