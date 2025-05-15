@@ -1,0 +1,15 @@
+pub mod model;
+pub mod source;
+pub mod stream;
+
+static SHARE_URL: &str = "https://deezer.page.link/";
+static PUBLIC_API_BASE: &str = "https://api.deezer.com/2.0";
+static PRIVATE_API_BASE: &str = "https://www.deezer.com/ajax/gw-light.php";
+static MEDIA_BASE: &str = "https://media.deezer.com/v1";
+
+static SECRET_KEY: &[u8; 16] = &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
+static SECRET_IV: [u8; 8] = [0, 1, 2, 3, 4, 5, 6, 7];
+static ARL: &str = "";
+static CHUNK_SIZE: usize = 2048;
+static USER_AGENT: &str =
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:138.0) Gecko/20100101 Firefox/138.0";
