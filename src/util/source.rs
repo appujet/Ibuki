@@ -4,13 +4,14 @@ use songbird::tracks::Track;
 use crate::{
     AvailableSources,
     models::{ApiTrack, ApiTrackResult},
-    source::{http::Http, youtube::Youtube},
+    source::{deezer::source::Deezer, http::Http, youtube::Youtube},
 };
 
 use super::errors::ResolverError;
 
 pub enum Sources {
     Youtube(Youtube),
+    Deezer(Deezer),
     Http(Http),
 }
 
@@ -40,6 +41,7 @@ impl ApiTrack {
 
         match &*client {
             Sources::Youtube(src) => src.make_playable(self).await,
+            Sources::Deezer(deezer) => todo!(),
             Sources::Http(src) => src.make_playable(self).await,
         }
     }

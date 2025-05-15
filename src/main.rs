@@ -14,7 +14,7 @@ use dlmalloc::GlobalDlmalloc;
 use dotenv::dotenv;
 use models::{ApiCpu, ApiMemory, ApiNodeMessage, ApiStats};
 use songbird::{driver::Scheduler, id::UserId};
-use source::{http::Http, youtube::Youtube};
+use source::{deezer::source::Deezer, http::Http, youtube::Youtube};
 use std::sync::LazyLock;
 use std::{env::set_var, net::SocketAddr};
 use tokio::{
@@ -75,6 +75,10 @@ async fn main() {
         src_name.to_lowercase(),
         Sources::Youtube(Youtube::new(None)),
     );
+    tracing::info!("Registered [{}] into sources list", src_name);
+
+    let src_name = String::from("Deezer");
+    AvailableSources.insert(src_name.to_lowercase(), Sources::Deezer(Deezer::new(None)));
     tracing::info!("Registered [{}] into sources list", src_name);
 
     let src_name = String::from("HTTP");

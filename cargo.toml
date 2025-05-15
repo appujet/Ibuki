@@ -20,6 +20,11 @@ thiserror = "2.0.12"
 cap = "0.1.2"
 bytesize = "2.0.1"
 perf_monitor = "0.2.1"
+regex = "1.11.1"
+hex = "0.4.3"
+md5 = "0.7.0"
+blowfish = "0.9.1"
+cbc = "0.1.2"
 
 [dependencies.rustypipe]
 version = "0.11.4"
@@ -36,7 +41,7 @@ features = ["v4", "v7"]
 [dependencies.reqwest]
 version = "0.12.2"
 default-features = false
-features = ["json"]
+features = ["blocking", "json"]
 
 [dependencies.tokio]
 version = "1.44.1"

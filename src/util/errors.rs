@@ -13,8 +13,12 @@ pub enum ConverterError {
 pub enum ResolverError {
     #[error("Important Data Missing: {0}")]
     MissingRequiredData(&'static str),
+    #[error("Response received is not ok [{0}]")]
+    FailedStatusCode(String),
     #[error(transparent)]
     Base64EncodeError(#[from] Base64EncodeError),
+    #[error(transparent)]
+    SerdeJson(#[from] serde_json::Error),
     #[error(transparent)]
     AudioStream(#[from] songbird::input::AudioStreamError),
     #[error(transparent)]

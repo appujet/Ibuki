@@ -147,6 +147,7 @@ pub async fn encode(query: Query<EncodeQueryString>) -> Result<Response<Body>, E
                         control = ControlFlow::Break(());
                     }
                 }
+                Sources::Deezer(src) => todo!(),
                 Sources::Http(src) => {
                     if src.valid_url(&query.identifier).await {
                         result = src.resolve(&query.identifier).await?;
