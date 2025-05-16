@@ -46,7 +46,7 @@ pub struct DeezerGetMediaError {
 
 #[derive(Debug, Deserialize)]
 pub struct DeezerGetMedia {
-    pub errors: Option<Vec<DeezerGetMediaError>>,
+    pub error: Option<Vec<DeezerGetMediaError>>,
     pub data: Option<Vec<DeezerGetMediaData>>,
 }
 
@@ -181,10 +181,6 @@ pub struct InternalDeezerSongArtist {
     pub art_picture: String,
     #[serde(rename = "RANK")]
     pub rank: String,
-    #[serde(rename = "LOCALES")]
-    pub locales: Vec<String>,
-    #[serde(rename = "__TYPE__")]
-    pub type_field: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -254,9 +250,9 @@ pub struct InternalDeezerUser {
     #[serde(rename = "OPTIONS")]
     pub options: InternalDeezerOptions,
     #[serde(rename = "EXPLICIT_CONTENT_LEVEL")]
-    pub explicit_content_level: String,
+    pub explicit_content_level: Option<String>,
     #[serde(rename = "EXPLICIT_CONTENT_LEVELS_AVAILABLE")]
-    pub explicit_content_levels_available: Vec<String>,
+    pub explicit_content_levels_available: Option<Vec<String>>,
     #[serde(rename = "HAS_UPNEXT")]
     pub has_upnext: bool,
     #[serde(rename = "LOVEDTRACKS_ID")]

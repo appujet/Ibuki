@@ -1,6 +1,6 @@
-use std::{str::FromStr, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 
-use reqwest::{Client, Url};
+use reqwest::Client;
 use songbird::{
     input::{AuxMetadata, Compose, HttpRequest, Input, LiveInput},
     tracks::Track,
@@ -8,7 +8,7 @@ use songbird::{
 
 use crate::{
     models::{ApiTrack, ApiTrackInfo, ApiTrackResult, Empty},
-    util::{encoder::encode_base64, errors::ResolverError, source::Source},
+    util::{encoder::encode_base64, errors::ResolverError, source::Source, url::is_url},
 };
 
 pub struct Http {
@@ -31,7 +31,7 @@ impl Source for Http {
     }
 
     async fn valid_url(&self, url: &str) -> bool {
-        Url::from_str(url).ok().is_some()
+        is_url(url)
     }
 
     async fn try_search(&self, _: &str) -> bool {

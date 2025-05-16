@@ -1,19 +1,3 @@
-use std::time::Duration;
-use std::{str::FromStr, sync::Arc};
-
-use regex::Regex;
-use reqwest::{Body, Client, Url};
-use songbird::input::{Compose, HttpRequest, Input, LiveInput};
-use songbird::tracks::Track;
-use tokio::sync::Mutex;
-use tokio::time::Instant;
-
-use crate::util::encoder::encode_base64;
-use crate::{
-    models::{ApiTrack, ApiTrackInfo, ApiTrackResult},
-    util::{errors::ResolverError, source::Source},
-};
-
 use super::model::{
     DeezerApiTrack, DeezerData, DeezerGetMedia, DeezerGetUrlBody, DeezerGetUrlMedia,
     DeezerMakePlayableBody, DeezerQuality, DeezerQualityFormat, InternalDeezerGetUserData,
@@ -22,6 +6,20 @@ use super::model::{
 use super::stream::DeezerHttpStream;
 use super::{ARL, MEDIA_BASE, PUBLIC_API_BASE};
 use super::{PRIVATE_API_BASE, SECRET_KEY, model::Tokens};
+use crate::util::encoder::encode_base64;
+use crate::util::url::is_url;
+use crate::{
+    models::{ApiTrack, ApiTrackInfo, ApiTrackResult},
+    util::{errors::ResolverError, source::Source},
+};
+use regex::Regex;
+use reqwest::{Body, Client};
+use songbird::input::{Compose, HttpRequest, Input, LiveInput};
+use songbird::tracks::Track;
+use std::sync::Arc;
+use std::time::Duration;
+use tokio::sync::Mutex;
+use tokio::time::Instant;
 
 pub struct Deezer {
     client: Client,
@@ -49,13 +47,13 @@ impl Source for Deezer {
     }
 
     async fn valid_url(&self, url: &str) -> bool {
-        Url::from_str(url).ok().is_some() && self.regex.captures(url).is_some()
+        is_url(url) && self.regex.captures(url).is_some()
     }
 
     async fn try_search(&self, query: &str) -> bool {
-        !query.starts_with(self.search_prefixes.0)
-            && !query.starts_with(self.search_prefixes.1)
-            && !query.starts_with(self.search_prefixes.2)
+        query.starts_with(self.search_prefixes.0)
+            || query.starts_with(self.search_prefixes.1)
+            || query.starts_with(self.search_prefixes.2)
     }
 
     async fn search(&self, query: &str) -> Result<ApiTrackResult, ResolverError> {
@@ -87,7 +85,6 @@ impl Source for Deezer {
             let request = self
                 .client
                 .get(format!("{PUBLIC_API_BASE}/track/isrc:{isrc}"))
-                .query(&query)
                 .build()?;
 
             let response = self.client.execute(request).await?;
@@ -111,7 +108,7 @@ impl Source for Deezer {
                     identifier: deezer_api_track.id.to_string(),
                     is_seekable: true,
                     author: deezer_api_track.artist.name.clone(),
-                    length: (deezer_api_track.duration * 1000) as u64,
+                    length: (deezer_api_track.duration as u64) * 1000,
                     is_stream: false,
                     position: 0,
                     title: deezer_api_track.title.clone(),
@@ -169,9 +166,11 @@ impl Source for Deezer {
         }
 
         let response = {
-            let data = response.json::<InternalDeezerSongData>().await?;
+            let data = response
+                .json::<InternalDeezerResponse<InternalDeezerSongData>>()
+                .await?;
 
-            let format = DeezerQualityFormat::new(&data, Some(DeezerQuality::Flac));
+            let format = DeezerQualityFormat::new(&data.results, Some(DeezerQuality::Flac));
 
             let body = DeezerGetUrlBody {
                 license_token: tokens.license_token.clone(),
@@ -179,7 +178,7 @@ impl Source for Deezer {
                     media_type: String::from("FULL"),
                     formats: vec![format],
                 }],
-                track_tokens: vec![data.track_token],
+                track_tokens: vec![data.results.track_token],
             };
 
             let request = self
@@ -217,6 +216,8 @@ impl Source for Deezer {
             .ok_or(ResolverError::MissingRequiredData(
                 "media.data.first().media.first().sources.first()",
             ))?;
+
+        println!("4");
 
         let mut stream = DeezerHttpStream::new(
             HttpRequest::new(self.get_client(), media.url.clone()),

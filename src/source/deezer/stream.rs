@@ -8,6 +8,7 @@ use songbird::input::{AudioStream, AudioStreamError, Compose, HttpRequest};
 use std::cmp::min;
 use std::io::{Error as IoError, ErrorKind, Read, Result as IoResult, Seek, SeekFrom};
 use symphonia::core::io::MediaSource;
+use tokio::task::block_in_place;
 
 pub struct DeezerHttpStream {
     request: HttpRequest,
@@ -24,6 +25,8 @@ impl Compose for DeezerHttpStream {
         &mut self,
     ) -> Result<AudioStream<Box<dyn MediaSource>>, AudioStreamError> {
         let stream = self.request.create_async().await?;
+
+        println!("debug, req url {}", self.request.request);
 
         let hint = stream.hint;
 
@@ -50,8 +53,11 @@ pub struct DeezerMediaSource {
 impl Read for DeezerMediaSource {
     fn read(&mut self, buf: &mut [u8]) -> IoResult<usize> {
         while self.buffer_len < CHUNK_SIZE {
-            // reads the source by CHUNK_SIZE, then is inserted into self.buffer, overwriting the old one
-            let bytes_read = self.source.read(&mut self.buffer[self.buffer_len..])?;
+            let bytes_read = block_in_place(|| {
+                self.source
+                    .read(&mut self.buffer[self.buffer_len..])
+                    .unwrap_or(0)
+            });
 
             if bytes_read == 0 {
                 break;
@@ -112,7 +118,7 @@ impl DeezerMediaSource {
             source,
             key,
             buffer: [0; CHUNK_SIZE],
-            buffer_len: CHUNK_SIZE,
+            buffer_len: 0,
             current_chunk: 0,
             decrypted: Vec::new(),
         }

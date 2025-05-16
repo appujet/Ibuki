@@ -11,7 +11,7 @@ use axum::{body::Body, extract::Query, response::Response};
 use serde_json::Value;
 use songbird::id::GuildId;
 use std::num::NonZeroU64;
-use std::ops::ControlFlow;
+use std::sync::atomic::Ordering;
 
 pub async fn get_player(
     Path(PlayerMethodsPath {
@@ -67,9 +67,8 @@ pub async fn update_player(
         .get_player(&id)
         .ok_or(EndpointError::NotFound)?;
 
-    if let Some(Some(encoded)) = update_player.track.map(|track| track.encoded)
-        && !query.no_replace.unwrap_or(false)
-    {
+    // todo: no replace here
+    if let Some(Some(encoded)) = update_player.track.map(|track| track.encoded) {
         match encoded {
             Value::Null => {
                 player.stop().await;
@@ -133,41 +132,29 @@ pub async fn encode(query: Query<EncodeQueryString>) -> Result<Response<Body>, E
         let mut result = ApiTrackResult::Empty(None);
 
         for source in AvailableSources.iter() {
-            let mut control: ControlFlow<(), ()> = ControlFlow::Continue(());
-
             match source.value() {
                 Sources::Youtube(src) => {
                     if src.try_search(&query.identifier).await {
                         result = src.search(&query.identifier).await?;
-
-                        control = ControlFlow::Break(());
                     } else if src.valid_url(&query.identifier).await {
                         result = src.resolve(&query.identifier).await?;
-
-                        control = ControlFlow::Break(());
                     }
                 }
                 Sources::Deezer(src) => {
                     if src.try_search(&query.identifier).await {
                         result = src.search(&query.identifier).await?;
-
-                        control = ControlFlow::Break(());
                     } else if src.valid_url(&query.identifier).await {
                         result = src.resolve(&query.identifier).await?;
-
-                        control = ControlFlow::Break(());
                     }
                 }
                 Sources::Http(src) => {
                     if src.valid_url(&query.identifier).await {
                         result = src.resolve(&query.identifier).await?;
-
-                        control = ControlFlow::Break(());
                     }
                 }
             }
 
-            if let ControlFlow::Break(()) = control {
+            if result != ApiTrackResult::Empty(None) {
                 break;
             }
         }

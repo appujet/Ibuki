@@ -70,7 +70,7 @@ async fn main() {
         .with_thread_ids(true)
         .with_thread_names(true)
         .with_target(true)
-        .with_max_level(Level::INFO)
+        .with_max_level(Level::DEBUG)
         .finish();
 
     tracing::subscriber::set_global_default(subscriber).expect("Failed to set global logger");

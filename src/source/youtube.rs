@@ -1,5 +1,7 @@
-use std::sync::Arc;
-
+use crate::{
+    models::{ApiPlaylistInfo, ApiTrack, ApiTrackInfo, ApiTrackPlaylist, ApiTrackResult, Empty},
+    util::{encoder::encode_base64, errors::ResolverError, source::Source},
+};
 use bytesize::ByteSize;
 use reqwest::Client;
 use rustypipe::{
@@ -11,11 +13,7 @@ use songbird::{
     input::{Compose, HttpRequest, Input, LiveInput},
     tracks::Track,
 };
-
-use crate::{
-    models::{ApiPlaylistInfo, ApiTrack, ApiTrackInfo, ApiTrackPlaylist, ApiTrackResult, Empty},
-    util::{encoder::encode_base64, errors::ResolverError, source::Source},
-};
+use std::sync::Arc;
 
 pub struct Youtube {
     client: Client,
