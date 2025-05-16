@@ -25,6 +25,7 @@ hex = "0.4.3"
 md5 = "0.7.0"
 blowfish = "0.9.1"
 cbc = "0.1.2"
+rand_agents = "1.0.0"
 
 [dependencies.rustypipe]
 version = "0.11.4"

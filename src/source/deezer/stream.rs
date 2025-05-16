@@ -6,7 +6,7 @@ use cbc::cipher::{KeyIvInit, block_padding::NoPadding};
 use cbc::{Decryptor, cipher::BlockDecryptMut};
 use songbird::input::{AudioStream, AudioStreamError, Compose, HttpRequest};
 use std::cmp::min;
-use std::io::{Read, Seek, SeekFrom};
+use std::io::{Error as IoError, ErrorKind, Read, Result as IoResult, Seek, SeekFrom};
 use symphonia::core::io::MediaSource;
 
 pub struct DeezerHttpStream {
@@ -28,10 +28,7 @@ impl Compose for DeezerHttpStream {
         let hint = stream.hint;
 
         Ok(AudioStream {
-            input: Box::new(DeezerMediaSource::new(
-                stream.input,
-                Decryptor::new_from_slices(&self.key, &SECRET_IV).unwrap(),
-            )) as Box<dyn MediaSource>,
+            input: Box::new(DeezerMediaSource::new(stream.input, self.key)) as Box<dyn MediaSource>,
             hint,
         })
     }
@@ -43,15 +40,15 @@ impl Compose for DeezerHttpStream {
 
 pub struct DeezerMediaSource {
     source: Box<dyn MediaSource>,
+    key: [u8; 16],
     buffer: [u8; CHUNK_SIZE],
     buffer_len: usize,
     current_chunk: usize,
-    decryptor: Decryptor<Blowfish>,
     decrypted: Vec<u8>,
 }
 
 impl Read for DeezerMediaSource {
-    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+    fn read(&mut self, buf: &mut [u8]) -> IoResult<usize> {
         while self.buffer_len < CHUNK_SIZE {
             // reads the source by CHUNK_SIZE, then is inserted into self.buffer, overwriting the old one
             let bytes_read = self.source.read(&mut self.buffer[self.buffer_len..])?;
@@ -65,14 +62,15 @@ impl Read for DeezerMediaSource {
 
         if self.current_chunk % 3 > 0 || self.buffer_len < CHUNK_SIZE {
             self.decrypted.extend(&self.buffer[..self.buffer_len]);
-        } else if let Ok(decrypted) = self
-            .decryptor
-            .clone()
-            .decrypt_padded_mut::<NoPadding>(&mut self.buffer[..self.buffer_len])
-        {
-            self.decrypted.extend(decrypted);
         } else {
-            tracing::warn!("Failed to decrypt a chunk");
+            let decryptor: Decryptor<Blowfish> = Decryptor::new_from_slices(&self.key, &SECRET_IV)
+                .map_err(|error| IoError::new(ErrorKind::Unsupported, error))?;
+
+            let decrypted = decryptor
+                .decrypt_padded_mut::<NoPadding>(&mut self.buffer[..self.buffer_len])
+                .map_err(|error| IoError::new(ErrorKind::InvalidInput, error.to_string()))?;
+
+            self.decrypted.extend(decrypted);
         }
 
         // reset buffer_len so the next write would write over the top of the old one
@@ -93,7 +91,7 @@ impl Read for DeezerMediaSource {
 }
 
 impl Seek for DeezerMediaSource {
-    fn seek(&mut self, pos: SeekFrom) -> std::io::Result<u64> {
+    fn seek(&mut self, pos: SeekFrom) -> IoResult<u64> {
         self.source.seek(pos)
     }
 }
@@ -109,14 +107,20 @@ impl MediaSource for DeezerMediaSource {
 }
 
 impl DeezerMediaSource {
-    pub fn new(source: Box<dyn MediaSource>, decryptor: Decryptor<Blowfish>) -> Self {
+    pub fn new(source: Box<dyn MediaSource>, key: [u8; 16]) -> Self {
         Self {
             source,
+            key,
             buffer: [0; CHUNK_SIZE],
             buffer_len: CHUNK_SIZE,
             current_chunk: 0,
-            decryptor,
             decrypted: Vec::new(),
         }
+    }
+}
+
+impl DeezerHttpStream {
+    pub fn new(request: HttpRequest, key: [u8; 16]) -> Self {
+        Self { request, key }
     }
 }

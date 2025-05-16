@@ -13,6 +13,7 @@ use dashmap::DashMap;
 use dlmalloc::GlobalDlmalloc;
 use dotenv::dotenv;
 use models::{ApiCpu, ApiMemory, ApiNodeMessage, ApiStats};
+use reqwest::{Client, ClientBuilder};
 use songbird::{driver::Scheduler, id::UserId};
 use source::{deezer::source::Deezer, http::Http, youtube::Youtube};
 use std::sync::LazyLock;
@@ -25,7 +26,10 @@ use tokio::{
 use tower::ServiceBuilder;
 use tracing::Level;
 use tracing_subscriber::fmt;
-use util::source::{Source, Sources};
+use util::{
+    headers::generate_headers,
+    source::{Source, Sources},
+};
 
 mod constants;
 mod middlewares;
@@ -47,6 +51,11 @@ pub static Clients: LazyLock<DashMap<UserId, WebsocketClient>> = LazyLock::new(D
 pub static AvailableSources: LazyLock<DashMap<String, Sources>> = LazyLock::new(DashMap::new);
 #[allow(non_upper_case_globals)]
 pub static Start: LazyLock<Instant> = LazyLock::new(Instant::now);
+#[allow(non_upper_case_globals)]
+pub static Reqwest: LazyLock<Client> = LazyLock::new(|| {
+    let builder = ClientBuilder::new().default_headers(generate_headers().unwrap());
+    builder.build().expect("Failed to create reqwest client")
+});
 
 #[main(flavor = "multi_thread")]
 async fn main() {
@@ -69,21 +78,40 @@ async fn main() {
     LazyLock::force(&Clients);
     LazyLock::force(&AvailableSources);
     LazyLock::force(&Start);
+    LazyLock::force(&Reqwest);
 
-    let src_name = String::from("Youtube");
-    AvailableSources.insert(
-        src_name.to_lowercase(),
-        Sources::Youtube(Youtube::new(None)),
-    );
-    tracing::info!("Registered [{}] into sources list", src_name);
+    {
+        let src_name = String::from("Youtube");
 
-    let src_name = String::from("Deezer");
-    AvailableSources.insert(src_name.to_lowercase(), Sources::Deezer(Deezer::new(None)));
-    tracing::info!("Registered [{}] into sources list", src_name);
+        AvailableSources.insert(
+            src_name.to_lowercase(),
+            Sources::Youtube(Youtube::new(Some(Reqwest.clone()))),
+        );
 
-    let src_name = String::from("HTTP");
-    AvailableSources.insert(src_name.to_lowercase(), Sources::Http(Http::new(None)));
-    tracing::info!("Registered [{}] into sources list", src_name);
+        tracing::info!("Registered [{}] into sources list", src_name);
+    }
+
+    {
+        let src_name = String::from("Deezer");
+        let client = Deezer::new(Some(Reqwest.clone()));
+
+        client.init().await;
+
+        AvailableSources.insert(src_name.to_lowercase(), Sources::Deezer(client));
+
+        tracing::info!("Registered [{}] into sources list", src_name);
+    }
+
+    {
+        let src_name = String::from("HTTP");
+
+        AvailableSources.insert(
+            src_name.to_lowercase(),
+            Sources::Http(Http::new(Some(Reqwest.clone()))),
+        );
+
+        tracing::info!("Registered [{}] into sources list", src_name);
+    }
 
     let mut stat = perf_monitor::cpu::ProcessStat::cur().unwrap();
     let cores = perf_monitor::cpu::processor_numbers().unwrap();

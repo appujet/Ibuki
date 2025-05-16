@@ -2,11 +2,10 @@ use std::time::Duration;
 use std::{str::FromStr, sync::Arc};
 
 use regex::Regex;
-use reqwest::blocking::Client as BlockingClient;
 use reqwest::{Body, Client, Url};
+use songbird::input::{Compose, HttpRequest, Input, LiveInput};
 use songbird::tracks::Track;
 use tokio::sync::Mutex;
-use tokio::task::block_in_place;
 use tokio::time::Instant;
 
 use crate::util::encoder::encode_base64;
@@ -15,13 +14,18 @@ use crate::{
     util::{errors::ResolverError, source::Source},
 };
 
-use super::model::{DeezerApiTrack, DeezerData, DeezerMakePlayableBody, PrivateResponse};
-use super::{ARL, PUBLIC_API_BASE, USER_AGENT};
+use super::model::{
+    DeezerApiTrack, DeezerData, DeezerGetMedia, DeezerGetUrlBody, DeezerGetUrlMedia,
+    DeezerMakePlayableBody, DeezerQuality, DeezerQualityFormat, InternalDeezerGetUserData,
+    InternalDeezerResponse, InternalDeezerSongData,
+};
+use super::stream::DeezerHttpStream;
+use super::{ARL, MEDIA_BASE, PUBLIC_API_BASE};
 use super::{PRIVATE_API_BASE, SECRET_KEY, model::Tokens};
 
 pub struct Deezer {
     client: Client,
-    tokens: Arc<Mutex<Tokens>>,
+    tokens: Arc<Mutex<Option<Tokens>>>,
     regex: Regex,
     search_prefixes: (&'static str, &'static str, &'static str),
 }
@@ -30,9 +34,9 @@ impl Source for Deezer {
     fn new(client: Option<Client>) -> Self {
         Self {
             client: client.unwrap_or_default(),
-            tokens: Arc::new(Mutex::new(Deezer::get_token_blocking())),
+            tokens: Arc::new(Mutex::new(None)),
             regex: Regex::new("(https?://)?(www\\.)?deezer\\.com/(?<countrycode>[a-zA-Z]{2}/)?(?<type>track|album|playlist|artist)/(?<identifier>[0-9]+)").expect("Failed to init RegEx"),
-            search_prefixes: ("dzsearch:", "dzisrc", "dzrec"),
+            search_prefixes: ("dzsearch:", "dzisrc:", "dzrec:"),
         }
     }
 
@@ -128,37 +132,35 @@ impl Source for Deezer {
         Ok(ApiTrackResult::Search(tracks))
     }
 
-    async fn resolve(&self, url: &str) -> Result<ApiTrackResult, ResolverError> {
+    async fn resolve(&self, _url: &str) -> Result<ApiTrackResult, ResolverError> {
         todo!()
     }
 
     async fn make_playable(&self, track: ApiTrack) -> Result<Track, ResolverError> {
-        let tokens = {
-            let guard = self.tokens.lock().await;
-            guard.clone()
+        let tokens = self.get_token().await?;
+
+        let response = {
+            let query = [
+                ("method", "song.getData"),
+                ("input", "3"),
+                ("api_version", "1.0"),
+                ("api_token", tokens.check_form.as_str()),
+            ];
+
+            let body = DeezerMakePlayableBody {
+                sng_id: track.info.identifier.clone(),
+            };
+
+            let request = self
+                .client
+                .post(PRIVATE_API_BASE)
+                .header("Cookie", tokens.create_cookie())
+                .body(Body::from(serde_json::to_string(&body)?))
+                .query(&query)
+                .build()?;
+
+            self.client.execute(request).await?
         };
-
-        let query = [
-            ("method", "song.getData"),
-            ("input", "3"),
-            ("api_version", "1.0"),
-            ("api_token", tokens.check_form.as_str()),
-        ];
-
-        let body = DeezerMakePlayableBody {
-            sng_id: track.info.identifier.clone(),
-        };
-
-        let request = self
-            .client
-            .post(PRIVATE_API_BASE)
-            .header("User-Agent", USER_AGENT)
-            .header("Cookie", tokens.create_cookie())
-            .body(Body::from(serde_json::to_string(&body)?))
-            .query(&query)
-            .build()?;
-
-        let response = self.client.execute(request).await?;
 
         if !response.status().is_success() {
             return Err(ResolverError::FailedStatusCode(
@@ -166,12 +168,73 @@ impl Source for Deezer {
             ));
         }
 
-        Err(ResolverError::InputNotSupported)
+        let response = {
+            let data = response.json::<InternalDeezerSongData>().await?;
+
+            let format = DeezerQualityFormat::new(&data, Some(DeezerQuality::Flac));
+
+            let body = DeezerGetUrlBody {
+                license_token: tokens.license_token.clone(),
+                media: vec![DeezerGetUrlMedia {
+                    media_type: String::from("FULL"),
+                    formats: vec![format],
+                }],
+                track_tokens: vec![data.track_token],
+            };
+
+            let request = self
+                .client
+                .post(format!("{MEDIA_BASE}/get_url"))
+                .header("Cookie", tokens.create_cookie())
+                .body(Body::from(serde_json::to_string(&body)?))
+                .build()?;
+
+            self.client.execute(request).await?
+        };
+
+        if !response.status().is_success() {
+            return Err(ResolverError::FailedStatusCode(
+                response.status().to_string(),
+            ));
+        }
+
+        let json = response.json::<DeezerGetMedia>().await?;
+
+        let data = json
+            .data
+            .ok_or(ResolverError::MissingRequiredData("media.data"))?;
+
+        let media = data
+            .first()
+            .ok_or(ResolverError::MissingRequiredData("media.data.first()"))?
+            .media
+            .first()
+            .ok_or(ResolverError::MissingRequiredData(
+                "media.data.first().media.first()",
+            ))?
+            .sources
+            .first()
+            .ok_or(ResolverError::MissingRequiredData(
+                "media.data.first().media.first().sources.first()",
+            ))?;
+
+        let mut stream = DeezerHttpStream::new(
+            HttpRequest::new(self.get_client(), media.url.clone()),
+            self.get_track_key(track.info.identifier.clone()),
+        );
+
+        let input = Input::Live(LiveInput::Raw(stream.create_async().await?), None);
+
+        Ok(Track::new_with_data(input, Arc::new(track)))
     }
 }
 
 impl Deezer {
-    fn get_track_key(id: String) -> [u8; 16] {
+    pub async fn init(&self) {
+        self.get_token().await.unwrap();
+    }
+
+    fn get_track_key(&self, id: String) -> [u8; 16] {
         let md5 = hex::encode(md5::compute(id).0);
         let hash = md5.as_bytes();
 
@@ -184,77 +247,13 @@ impl Deezer {
         key
     }
 
-    /**
-     * Used to initialize the source (This panics when it fails)
-     */
-    fn get_token_blocking() -> Tokens {
-        block_in_place(|| {
-            let client = BlockingClient::new();
-
-            let query = [
-                ("method", "deezer.getUserData"),
-                ("input", "3"),
-                ("api_version", "1.0"),
-                ("api_token", ""),
-            ];
-
-            let request = client
-                .post(PRIVATE_API_BASE)
-                .header("User-Agent", USER_AGENT)
-                .header("Content-Length", "0")
-                .header("Cookie", format!("arl={ARL}"))
-                .query(&query)
-                .build()
-                .expect("Failed to create a POST request");
-
-            let response = client
-                .execute(request)
-                .expect("Failed to execute the POST request");
-
-            if !response.status().is_success() {
-                panic!("Failed to inititalize Deezer Source: {}", response.status())
-            }
-
-            let headers = response
-                .headers()
-                .get_all("Set-Cookie")
-                .iter()
-                .map(|header| {
-                    String::from(header.to_str().expect("Can\'t convert header to string"))
-                })
-                .collect::<Vec<String>>();
-
-            let session_id = headers
-                .iter()
-                .find(|str| str.starts_with("sid="))
-                .expect("Session Id Not Found");
-
-            let unique_id = headers
-                .iter()
-                .find(|str| str.starts_with("dzr_uniq_id="))
-                .expect("Unique Id Not Found");
-
-            let data = response
-                .json::<PrivateResponse>()
-                .expect("Invalid JSON Recieved");
-
-            Tokens {
-                session_id: (*session_id).to_string(),
-                unique_id: (*unique_id).to_string(),
-                check_form: data.results.check_form,
-                license_token: data.results.user.options.license_token,
-                expire_at: Instant::now()
-                    .checked_add(Duration::from_secs(3600))
-                    .unwrap(),
-            }
-        })
-    }
-
     async fn get_token(&self) -> Result<Tokens, ResolverError> {
         let mut guard = self.tokens.lock().await;
 
-        if Instant::now().duration_since(guard.expire_at).as_secs() > 3600 {
-            return Ok(guard.clone());
+        if let Some(token) = guard.as_ref() {
+            if Instant::now().duration_since(token.expire_at).as_secs() > 3600 {
+                return Ok(token.clone());
+            }
         }
 
         let query = [
@@ -267,7 +266,6 @@ impl Deezer {
         let request = self
             .client
             .post(PRIVATE_API_BASE)
-            .header("User-Agent", USER_AGENT)
             .header("Content-Length", "0")
             .header("Cookie", format!("arl={ARL}"))
             .query(&query)
@@ -301,9 +299,11 @@ impl Deezer {
                 "Missing Deezer Unique Id",
             ))?;
 
-        let data = response.json::<PrivateResponse>().await?;
+        let data = response
+            .json::<InternalDeezerResponse<InternalDeezerGetUserData>>()
+            .await?;
 
-        *guard = Tokens {
+        let tokens = Tokens {
             session_id: (*session_id).to_string(),
             unique_id: (*unique_id).to_string(),
             check_form: data.results.check_form,
@@ -313,6 +313,8 @@ impl Deezer {
                 .ok_or(ResolverError::MissingRequiredData("Invalid Expire At"))?,
         };
 
-        Ok(guard.clone())
+        let _ = guard.insert(tokens.clone());
+
+        Ok(tokens)
     }
 }

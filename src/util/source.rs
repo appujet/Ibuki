@@ -41,7 +41,7 @@ impl ApiTrack {
 
         match &*client {
             Sources::Youtube(src) => src.make_playable(self).await,
-            Sources::Deezer(deezer) => todo!(),
+            Sources::Deezer(src) => src.make_playable(self).await,
             Sources::Http(src) => src.make_playable(self).await,
         }
     }
