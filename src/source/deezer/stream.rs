@@ -50,11 +50,8 @@ pub struct DeezerMediaSource {
 impl Read for DeezerMediaSource {
     fn read(&mut self, buf: &mut [u8]) -> IoResult<usize> {
         while self.buffer_len < CHUNK_SIZE {
-            let bytes_read = block_in_place(|| {
-                self.source
-                    .read(&mut self.buffer[self.buffer_len..])
-                    .unwrap_or(0)
-            });
+            let bytes_read =
+                block_in_place(|| self.source.read(&mut self.buffer[self.buffer_len..]))?;
 
             if bytes_read == 0 {
                 break;

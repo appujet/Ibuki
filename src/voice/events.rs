@@ -1,7 +1,7 @@
 use super::{manager::CleanerSender, player::Player};
 use crate::models::{
-    ApiException, ApiNodeMessage, ApiPlayer, ApiPlayerEvents, ApiPlayerUpdate, ApiTrack,
-    ApiTrackEnd, ApiTrackException, ApiTrackStart, ApiWebSocketClosed,
+    ApiNodeMessage, ApiPlayer, ApiPlayerEvents, ApiPlayerUpdate, ApiTrack, ApiTrackEnd,
+    ApiTrackStart, ApiWebSocketClosed,
 };
 use async_trait::async_trait;
 use axum::extract::ws::{Message, Utf8Bytes};
@@ -32,6 +32,7 @@ pub struct PlayerEvent {
     pub user_id: UserId,
     pub guild_id: GuildId,
     pub event: Event,
+    pub fired: Arc<AtomicBool>,
     pub active: Weak<AtomicBool>,
     pub data: Weak<Mutex<ApiPlayer>>,
     pub websocket: WeakSender<Message>,
@@ -46,6 +47,7 @@ impl PlayerEvent {
             user_id: player.user_id,
             guild_id: player.guild_id,
             event,
+            fired: Arc::new(AtomicBool::new(false)),
             active: Arc::downgrade(&player.active),
             data: Arc::downgrade(&player.data),
             websocket: player.websocket.clone(),
@@ -262,10 +264,14 @@ async fn handle_player_event(player_event: PlayerEvent, data_result: DataResult)
                     Some(())
                 }
                 TrackEvent::Playable => {
-                    player_event
-                        .active
-                        .upgrade()?
-                        .swap(false, Ordering::Relaxed);
+                    player_event.active.upgrade()?.swap(true, Ordering::Relaxed);
+
+                    // ensures playable is only sent to client once
+                    if player_event.fired.load(Ordering::Relaxed) {
+                        return None;
+                    }
+
+                    player_event.fired.swap(true, Ordering::Relaxed);
 
                     let arc = player_event.data.upgrade()?;
 
@@ -283,48 +289,6 @@ async fn handle_player_event(player_event: PlayerEvent, data_result: DataResult)
 
                     let serialized = serde_json::to_string(&ApiNodeMessage::Event(Box::new(
                         ApiPlayerEvents::TrackStartEvent(event),
-                    )))
-                    .ok()?;
-
-                    player_event
-                        .send_to_websocket(Message::Text(Utf8Bytes::from(serialized)))
-                        .await;
-
-                    Some(())
-                }
-                TrackEvent::Error => {
-                    player_event
-                        .active
-                        .upgrade()?
-                        .swap(false, Ordering::Relaxed);
-
-                    let arc = player_event.data.upgrade()?;
-
-                    let mut data = arc.lock().await;
-
-                    data.track.take();
-                    data.state.position = 0;
-
-                    drop(data);
-                    drop(arc);
-
-                    player_event.stop(false).await;
-
-                    let event = ApiTrackException {
-                        guild_id: player_event.guild_id.0.get(),
-                        track: track.as_ref().clone(),
-                        exception: ApiException {
-                            guild_id: player_event.guild_id.0.get(),
-                            message: Some(String::from(
-                                "The track has encountered a runtime issue",
-                            )),
-                            severity: String::from("COMMON"),
-                            cause: String::from("TrackEvent::Error Emitted"),
-                        },
-                    };
-
-                    let serialized = serde_json::to_string(&ApiNodeMessage::Event(Box::new(
-                        ApiPlayerEvents::TrackExceptionEvent(event),
                     )))
                     .ok()?;
 

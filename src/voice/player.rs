@@ -196,11 +196,6 @@ impl Player {
             PlayerEvent::new(Event::Track(TrackEvent::End), self),
         )?;
 
-        track_handle.add_event(
-            Event::Track(TrackEvent::Error),
-            PlayerEvent::new(Event::Track(TrackEvent::Error), self),
-        )?;
-
         let mut handle = self.handle.lock().await;
 
         let _ = handle.insert(track_handle);
