@@ -153,7 +153,7 @@ pub struct InternalDeezerSongData {
     #[serde(rename = "FILESIZE")]
     pub filesize: String,
     #[serde(rename = "GAIN")]
-    pub gain: String,
+    pub gain: Option<String>,
     #[serde(rename = "MEDIA_VERSION")]
     pub media_version: String,
     #[serde(rename = "TRACK_TOKEN")]
