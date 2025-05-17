@@ -217,8 +217,6 @@ impl Source for Deezer {
                 "media.data.first().media.first().sources.first()",
             ))?;
 
-        println!("4");
-
         let mut stream = DeezerHttpStream::new(
             HttpRequest::new(self.get_client(), media.url.clone()),
             self.get_track_key(track.info.identifier.clone()),

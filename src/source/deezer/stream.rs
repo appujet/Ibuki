@@ -25,8 +25,6 @@ impl Compose for DeezerHttpStream {
     ) -> Result<AudioStream<Box<dyn MediaSource>>, AudioStreamError> {
         let stream = self.request.create_async().await?;
 
-        println!("debug, req url {}", self.request.request);
-
         let hint = stream.hint;
 
         Ok(AudioStream {
