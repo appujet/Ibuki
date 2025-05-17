@@ -8,11 +8,13 @@ use super::errors::SeekableInitError;
 use async_trait::async_trait;
 use bytes::Bytes;
 use futures::TryStreamExt;
-use reqwest::header::{CONTENT_LENGTH, CONTENT_TYPE, RANGE, RETRY_AFTER};
+use reqwest::header::{ACCEPT_RANGES, CONTENT_LENGTH, CONTENT_TYPE, RETRY_AFTER};
 use reqwest::{Client, Response};
 use songbird::input::{AsyncMediaSource, AudioStreamError};
 use std::io::{Error as IoError, ErrorKind, Result as IoResult};
 use std::pin::Pin;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::task::{Context, Poll};
 use std::time::Duration;
 use symphonia::core::probe::Hint;
@@ -30,6 +32,7 @@ pub struct Seekable {
     client: Client,
     reader: Option<Reader>,
     fetcher: Option<Pin<Box<dyn futures::Future<Output = IoResult<Response>> + Send>>>,
+    resumable: Arc<AtomicBool>,
 }
 
 impl Unpin for Seekable {}
@@ -46,15 +49,12 @@ impl Seekable {
             length: None,
             reader: None,
             fetcher: None,
+            resumable: Arc::new(AtomicBool::new(false)),
         }
     }
 
     pub async fn init_seekable(&mut self) -> Result<(), SeekableInitError> {
-        let mut builder = self.client.get(&self.url);
-
-        if let Some(length) = self.length {
-            builder = builder.header(RANGE, format!("bytes=0-{}", length.saturating_sub(1)));
-        }
+        let builder = self.client.get(&self.url);
 
         let response = builder
             .send()
@@ -103,6 +103,15 @@ impl Seekable {
                 .and_then(|val| val.parse::<u64>().ok());
 
             self.length = length;
+
+            let resume = headers
+                .get(ACCEPT_RANGES)
+                .and_then(|a| a.to_str().ok())
+                .filter(|a| *a == "bytes");
+
+            if resume.is_some() {
+                self.resumable.swap(true, Ordering::Relaxed);
+            }
 
             Ok(())
         }
@@ -240,8 +249,23 @@ impl AsyncMediaSource for Seekable {
 
     async fn try_resume(
         &mut self,
-        _offset: u64,
+        offset: u64,
     ) -> Result<Box<dyn AsyncMediaSource>, AudioStreamError> {
-        Err(AudioStreamError::Unsupported)
+        if !self.resumable.load(Ordering::Relaxed) {
+            return Err(AudioStreamError::Unsupported);
+        }
+
+        let mut seekable = Box::new(Seekable::new(self.client.clone(), self.url.clone()));
+
+        seekable.init_seekable().await.map_err(|err| {
+            let msg: Box<dyn std::error::Error + Send + Sync + 'static> =
+                format!("Failed with init seekable error: {err}").into();
+
+            AudioStreamError::Fail(msg)
+        })?;
+
+        seekable.fetch_next_poll(offset);
+
+        Ok(seekable)
     }
 }
