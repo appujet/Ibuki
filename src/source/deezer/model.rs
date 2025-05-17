@@ -131,7 +131,7 @@ pub struct InternalDeezerSongData {
     #[serde(rename = "VERSION")]
     pub version: Option<String>,
     #[serde(rename = "MD5_ORIGIN")]
-    pub md5_origin: String,
+    pub md5_origin: Option<String>,
     #[serde(rename = "FILESIZE_AAC_64")]
     pub filesize_aac_64: String,
     #[serde(rename = "FILESIZE_MP3_64")]

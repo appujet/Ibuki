@@ -3,5 +3,6 @@ pub mod decoder;
 pub mod encoder;
 pub mod errors;
 pub mod headers;
+pub mod seek;
 pub mod source;
 pub mod url;

@@ -10,21 +10,35 @@ pub enum ConverterError {
 }
 
 #[derive(Error, Debug)]
+pub enum SeekableInitError {
+    #[error("Request was not sent due to [{0}]")]
+    FailedGet(String),
+    #[error("Response received is not ok [{0}]")]
+    FailedStatusCode(String),
+    #[error("Invalid retry header received [{0}]")]
+    InvalidRetryHeader(String),
+    #[error("Retry again after [{0}s]")]
+    RetryIn(u64),
+}
+
+#[derive(Error, Debug)]
 pub enum ResolverError {
     #[error("Important Data Missing: {0}")]
     MissingRequiredData(&'static str),
     #[error("Response received is not ok [{0}]")]
     FailedStatusCode(String),
     #[error(transparent)]
-    Base64EncodeError(#[from] Base64EncodeError),
+    SeekableInit(#[from] SeekableInitError),
+    #[error(transparent)]
+    Base64Encode(#[from] Base64EncodeError),
     #[error(transparent)]
     SerdeJson(#[from] serde_json::Error),
     #[error(transparent)]
     AudioStream(#[from] songbird::input::AudioStreamError),
     #[error(transparent)]
-    YoutubeError(#[from] rustypipe::error::Error),
+    Youtube(#[from] rustypipe::error::Error),
     #[error(transparent)]
-    ReqwestError(#[from] reqwest::Error),
+    Reqwest(#[from] reqwest::Error),
     #[error(transparent)]
     ToStr(#[from] reqwest::header::ToStrError),
     #[error("The track provided is not supported")]
