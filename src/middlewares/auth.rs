@@ -1,6 +1,5 @@
-use axum::{body::Body, extract::Request, http::Response, middleware::Next};
-
 use crate::util::errors::EndpointError;
+use axum::{body::Body, extract::Request, http::Response, middleware::Next};
 
 pub async fn authenticate(request: Request, next: Next) -> Result<Response<Body>, EndpointError> {
     let authorization = request

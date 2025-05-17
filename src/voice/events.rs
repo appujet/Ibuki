@@ -1,8 +1,8 @@
+use super::{manager::CleanerSender, player::Player};
 use crate::models::{
     ApiException, ApiNodeMessage, ApiPlayer, ApiPlayerEvents, ApiPlayerUpdate, ApiTrack,
     ApiTrackEnd, ApiTrackException, ApiTrackStart, ApiWebSocketClosed,
 };
-
 use async_trait::async_trait;
 use axum::extract::ws::{Message, Utf8Bytes};
 use flume::WeakSender;
@@ -18,8 +18,6 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
 };
 use tokio::sync::Mutex;
-
-use super::{manager::CleanerSender, player::Player};
 
 enum DataResult {
     // probably usable in future

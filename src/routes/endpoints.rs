@@ -1,5 +1,9 @@
-use super::{DecodeQueryString, EncodeQueryString, PlayerMethodsPath, PlayerUpdateQuery};
-use crate::models::{ApiPlayerOptions, ApiTrack, ApiTrackResult, Empty};
+use super::{
+    DecodeQueryString, EncodeQueryString, PlayerMethodsPath, PlayerUpdateQuery, SessionMethodsPath,
+};
+use crate::models::{
+    ApiPlayerOptions, ApiSessionBody, ApiSessionInfo, ApiTrack, ApiTrackResult, Empty,
+};
 use crate::util::converter::numbers::IbukiGuildId;
 use crate::util::decoder::decode_base64;
 use crate::util::errors::EndpointError;
@@ -67,16 +71,17 @@ pub async fn update_player(
         .get_player(&id)
         .ok_or(EndpointError::NotFound)?;
 
-    // todo: no replace here
     if let Some(Some(encoded)) = update_player.track.map(|track| track.encoded) {
-        match encoded {
-            Value::Null => {
-                player.stop().await;
+        if !player.active.load(Ordering::Relaxed) || !query.no_replace.unwrap_or(false) {
+            match encoded {
+                Value::Null => {
+                    player.stop().await;
+                }
+                Value::String(encoded) => {
+                    player.play(encoded).await?;
+                }
+                _ => {}
             }
-            Value::String(encoded) => {
-                player.play(encoded).await?;
-            }
-            _ => {}
         }
     }
 
@@ -86,6 +91,10 @@ pub async fn update_player(
 
     if let Some(position) = update_player.position {
         player.seek(position).await;
+    }
+
+    if let Some(volume) = update_player.volume {
+        player.set_volume(volume as f32).await;
     }
 
     let string = serde_json::to_string_pretty(&*player.data.lock().await)?;
@@ -110,6 +119,29 @@ pub async fn destroy_player(
     client.player_manager.disconnect_player(&id).await;
 
     Ok(Response::new(Body::from(())))
+}
+
+#[tracing::instrument]
+pub async fn update_session(
+    Path(SessionMethodsPath { session_id }): Path<SessionMethodsPath>,
+    Json(update_session): Json<ApiSessionBody>,
+) -> Result<Response<Body>, EndpointError> {
+    let mut client = Clients
+        .iter_mut()
+        .find(|client| client.session_id == session_id)
+        .ok_or(EndpointError::NotFound)?;
+
+    client.resume = update_session.resuming;
+    client.timeout = update_session.timeout as u16;
+
+    let info = ApiSessionInfo {
+        resuming_key: client.session_id,
+        timeout: client.timeout,
+    };
+
+    let string = serde_json::to_string_pretty(&info)?;
+
+    Ok(Response::new(Body::from(string)))
 }
 
 pub async fn decode(query: Query<DecodeQueryString>) -> Result<Response<Body>, EndpointError> {

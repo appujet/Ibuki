@@ -1,13 +1,11 @@
-use std::collections::HashMap;
-
+use crate::util::errors::EndpointError;
 use axum::{
     body::Body,
     extract::{Path, Request},
     http::Response,
     middleware::Next,
 };
-
-use crate::util::errors::EndpointError;
+use std::collections::HashMap;
 
 #[tracing::instrument]
 pub async fn request(

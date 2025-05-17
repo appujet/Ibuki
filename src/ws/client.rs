@@ -28,6 +28,8 @@ pub struct WebsocketClient {
     pub user_id: UserId,
     pub session_id: u128,
     pub player_manager: PlayerManager,
+    pub resume: bool,
+    pub timeout: u16,
     message_sender: Sender<Message>,
     message_receiver: Receiver<Message>,
     handles: Vec<JoinHandle<()>>,
@@ -38,11 +40,15 @@ impl WebsocketClient {
         let session_id = Uuid::new_v4().as_u128();
         let (message_sender, message_receiver) = unbounded::<Message>();
         let player_manager = PlayerManager::new(message_sender.downgrade(), user_id);
+        let resume = false;
+        let timeout = 30;
 
         Self {
             user_id,
             session_id,
             player_manager,
+            resume,
+            timeout,
             message_sender,
             message_receiver,
             handles: vec![],
@@ -68,7 +74,7 @@ impl WebsocketClient {
 
         let queue_length = self.message_receiver.len();
 
-        if session_id.filter(|id| *id == self.session_id).is_some() {
+        if self.resume && session_id.filter(|id| *id == self.session_id).is_some() {
             let mut messages = iter(self.message_receiver.drain().map(Ok::<Message, Error>));
 
             sender.send_all(&mut messages).await?;
@@ -102,6 +108,9 @@ impl WebsocketClient {
         let user_id = self.user_id.to_owned();
         let players = self.player_manager.players.clone();
 
+        let timeout = self.timeout;
+        let resume = self.resume;
+
         let receive_handle = tokio::spawn(async move {
             while let Some(Ok(message)) = receiver.next().await {
                 if let Message::Close(close_frame) = message {
@@ -122,15 +131,16 @@ impl WebsocketClient {
 
             drop(receiver);
 
-            // todo: not hard coded and configurable
-            let duration = Duration::from_secs(60);
+            if resume && timeout > 0 {
+                let duration = Duration::from_secs(timeout as u64);
 
-            tracing::info!(
-                "Websocket connection was closed abruptly and is possible to be resumed within {} sec(s)",
-                duration.as_secs()
-            );
+                tracing::info!(
+                    "Websocket connection was closed abruptly and is possible to be resumed within {} sec(s)",
+                    duration.as_secs()
+                );
 
-            sleep(duration).await;
+                sleep(duration).await;
+            }
 
             players.clear();
 

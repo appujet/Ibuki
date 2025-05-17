@@ -1,13 +1,11 @@
-use std::collections::HashMap;
-
+use crate::{constants::VERSION, util::errors::EndpointError};
 use axum::{
     body::Body,
     extract::{Path, Request},
     http::Response,
     middleware::Next,
 };
-
-use crate::{constants::VERSION, util::errors::EndpointError};
+use std::collections::HashMap;
 
 pub async fn check(
     Path(params): Path<HashMap<String, String>>,

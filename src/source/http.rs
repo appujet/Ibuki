@@ -1,15 +1,13 @@
-use std::{sync::Arc, time::Duration};
-
+use crate::{
+    models::{ApiTrack, ApiTrackInfo, ApiTrackResult, Empty},
+    util::{encoder::encode_base64, errors::ResolverError, source::Source, url::is_url},
+};
 use reqwest::Client;
 use songbird::{
     input::{AuxMetadata, Compose, HttpRequest, Input, LiveInput},
     tracks::Track,
 };
-
-use crate::{
-    models::{ApiTrack, ApiTrackInfo, ApiTrackResult, Empty},
-    util::{encoder::encode_base64, errors::ResolverError, source::Source, url::is_url},
-};
+use std::{sync::Arc, time::Duration};
 
 pub struct Http {
     client: Client,

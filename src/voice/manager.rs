@@ -1,8 +1,6 @@
+use super::player::Player;
 use crate::models::ApiVoiceData;
 use crate::util::errors::PlayerManagerError;
-
-use super::player::Player;
-
 use axum::extract::ws::Message;
 use dashmap::DashMap;
 use dashmap::mapref::one::Ref;

@@ -1,8 +1,9 @@
-use std::{
-    sync::{Arc, atomic::AtomicBool},
-    time::{Duration, Instant},
+use super::{events::PlayerEvent, manager::CleanerSender};
+use crate::{
+    Scheduler,
+    models::{ApiPlayer, ApiPlayerState, ApiTrack, ApiVoiceData, Empty},
+    util::{decoder::decode_base64, errors::PlayerError},
 };
-
 use axum::extract::ws::Message;
 use flume::WeakSender;
 use songbird::{
@@ -11,14 +12,11 @@ use songbird::{
     id::{GuildId, UserId},
     tracks::{TrackHandle, TrackState},
 };
-use tokio::{sync::Mutex, task};
-
-use super::{events::PlayerEvent, manager::CleanerSender};
-use crate::{
-    Scheduler,
-    models::{ApiPlayer, ApiPlayerState, ApiTrack, ApiVoiceData, Empty},
-    util::{decoder::decode_base64, errors::PlayerError},
+use std::{
+    sync::{Arc, atomic::AtomicBool},
+    time::{Duration, Instant},
 };
+use tokio::{sync::Mutex, task};
 
 #[derive(Clone)]
 pub struct Player {

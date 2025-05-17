@@ -1,13 +1,11 @@
-use reqwest::Client;
-use songbird::tracks::Track;
-
+use super::errors::ResolverError;
 use crate::{
     AvailableSources,
     models::{ApiTrack, ApiTrackResult},
     source::{deezer::source::Deezer, http::Http, youtube::Youtube},
 };
-
-use super::errors::ResolverError;
+use reqwest::Client;
+use songbird::tracks::Track;
 
 pub enum Sources {
     Youtube(Youtube),

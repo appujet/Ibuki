@@ -10,6 +10,11 @@ pub struct PlayerMethodsPath {
 }
 
 #[derive(Deserialize, Debug)]
+pub struct SessionMethodsPath {
+    pub session_id: u128,
+}
+
+#[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayerUpdateQuery {
     pub no_replace: Option<bool>,

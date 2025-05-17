@@ -1,9 +1,8 @@
 #![allow(dead_code, unused)]
 
+use crate::source::deezer::ARL;
 use serde::{Deserialize, Serialize};
 use tokio::time::Instant;
-
-use crate::source::deezer::ARL;
 
 pub enum DeezerQuality {
     Flac,

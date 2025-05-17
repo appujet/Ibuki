@@ -206,6 +206,10 @@ async fn main() {
             "/v{version}/sessions/{session_id}/players/{guild_id}",
             routing::delete(routes::endpoints::destroy_player),
         )
+        .route(
+            "/v{version}/sessions/{session_id}",
+            routing::patch(routes::endpoints::update_session),
+        )
         .route_layer(
             ServiceBuilder::new()
                 .layer(from_fn(middlewares::version::check))
