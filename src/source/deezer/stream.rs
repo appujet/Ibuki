@@ -1,10 +1,10 @@
 use super::{CHUNK_SIZE, SECRET_IV};
-use crate::util::seek::Seekable;
+use crate::util::seek::SeekableSource;
 use async_trait::async_trait;
 use blowfish::Blowfish;
 use cbc::cipher::{KeyIvInit, block_padding::NoPadding};
 use cbc::{Decryptor, cipher::BlockDecryptMut};
-use songbird::input::{AsyncAdapterStream, AudioStream, AudioStreamError, Compose, HttpRequest};
+use songbird::input::{AudioStream, AudioStreamError, Compose, HttpRequest};
 use std::cmp::min;
 use std::io::{Error as IoError, ErrorKind, Read, Result as IoResult, Seek, SeekFrom};
 use symphonia::core::io::MediaSource;
@@ -24,31 +24,14 @@ impl Compose for DeezerHttpStream {
     async fn create_async(
         &mut self,
     ) -> Result<AudioStream<Box<dyn MediaSource>>, AudioStreamError> {
-        let mut seekable = Box::new(Seekable::new(
-            self.request.client.clone(),
-            self.request.request.clone(),
-        ));
+        let request = self.request.create_async().await?;
 
-        if let Err(error) = seekable.init_seekable().await {
-            tracing::warn!(
-                "Something errored while trying to init a seekable stream {}",
-                error
-            );
-        }
-
-        seekable.fetch_next_poll(0);
-
-        let length = seekable.length.ok_or(AudioStreamError::Unsupported)? as usize;
-        let hint = seekable.hint.clone();
-
-        if hint.is_none() {
-            return Err(AudioStreamError::Unsupported);
-        }
-
-        let adaptor = Box::new(AsyncAdapterStream::new(seekable, length));
+        let seekable = SeekableSource::new(request.input);
+        let hint = request.hint;
 
         Ok(AudioStream {
-            input: Box::new(DeezerMediaSource::new(adaptor, self.key)) as Box<dyn MediaSource>,
+            input: Box::new(DeezerMediaSource::new(Box::new(seekable), self.key))
+                as Box<dyn MediaSource>,
             hint,
         })
     }
@@ -59,7 +42,7 @@ impl Compose for DeezerHttpStream {
 }
 
 pub struct DeezerMediaSource {
-    source: Box<AsyncAdapterStream>,
+    source: Box<dyn MediaSource>,
     key: [u8; 16],
     buffer: [u8; CHUNK_SIZE],
     buffer_len: usize,
@@ -127,7 +110,7 @@ impl MediaSource for DeezerMediaSource {
 }
 
 impl DeezerMediaSource {
-    pub fn new(source: Box<AsyncAdapterStream>, key: [u8; 16]) -> Self {
+    pub fn new(source: Box<dyn MediaSource>, key: [u8; 16]) -> Self {
         Self {
             source,
             key,

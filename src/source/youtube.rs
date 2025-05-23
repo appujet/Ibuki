@@ -1,6 +1,6 @@
 use crate::{
     models::{ApiPlaylistInfo, ApiTrack, ApiTrackInfo, ApiTrackPlaylist, ApiTrackResult, Empty},
-    util::{encoder::encode_base64, errors::ResolverError, source::Source},
+    util::{encoder::encode_base64, errors::ResolverError, seek::SeekableSource, source::Source},
 };
 use bytesize::ByteSize;
 use reqwest::Client;
@@ -62,6 +62,8 @@ impl Source for Youtube {
     }
 
     async fn search(&self, query: &str) -> Result<ApiTrackResult, ResolverError> {
+        tracing::info!("{}", query);
+
         let term = query
             .strip_prefix("ytsearch")
             .or(query.strip_prefix("ytmsearch"))
@@ -350,7 +352,13 @@ impl Source for Youtube {
         );
 
         let stream = request.create_async().await?;
-        let input = Input::Live(LiveInput::Raw(stream), None);
+
+        let seekable = SeekableSource::new(stream.input);
+
+        let input = Input::Live(
+            LiveInput::Raw(seekable.into_audio_stream(stream.hint)),
+            None,
+        );
 
         Ok(Track::new_with_data(input, Arc::new(track)))
     }

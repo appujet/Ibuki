@@ -1,6 +1,9 @@
 use crate::{
     models::{ApiTrack, ApiTrackInfo, ApiTrackResult, Empty},
-    util::{encoder::encode_base64, errors::ResolverError, source::Source, url::is_url},
+    util::{
+        encoder::encode_base64, errors::ResolverError, seek::SeekableSource, source::Source,
+        url::is_url,
+    },
 };
 use reqwest::Client;
 use songbird::{
@@ -86,7 +89,13 @@ impl Source for Http {
         );
 
         let stream = request.create_async().await?;
-        let input = Input::Live(LiveInput::Raw(stream), None);
+
+        let seekable = SeekableSource::new(stream.input);
+
+        let input = Input::Live(
+            LiveInput::Raw(seekable.into_audio_stream(stream.hint)),
+            None,
+        );
 
         Ok(Track::new_with_data(input, Arc::new(track)))
     }
