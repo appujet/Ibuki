@@ -45,63 +45,55 @@ pub struct DeezerMediaSource {
     source: Box<dyn MediaSource>,
     key: [u8; 16],
     buffer: [u8; CHUNK_SIZE],
-    buffer_len: usize,
-    current_chunk: usize,
-    decrypted: Vec<u8>,
+    position: usize
 }
 
 impl Read for DeezerMediaSource {
     fn read(&mut self, buf: &mut [u8]) -> IoResult<usize> {
-        while self.buffer_len < CHUNK_SIZE {
-            let bytes_read =
-                block_in_place(|| self.source.read(&mut self.buffer[self.buffer_len..]))?;
+        let mut total_read = 0;
+
+        while total_read < CHUNK_SIZE {
+            let bytes_read = block_in_place(|| self.source.read(&mut self.buffer[total_read..]))?;
 
             if bytes_read == 0 {
                 break;
             }
 
-            self.buffer_len += bytes_read;
+            total_read += bytes_read;
         }
 
-        if self.current_chunk % 3 > 0 || self.buffer_len < CHUNK_SIZE {
-            self.decrypted.extend(&self.buffer[..self.buffer_len]);
+        let current_chunk = self.position / CHUNK_SIZE;
+
+        let end = min(buf.len(), total_read);
+
+        if current_chunk % 3 > 0 || total_read < CHUNK_SIZE {
+            buf[..end].copy_from_slice(&self.buffer[..end]);
         } else {
             let decryptor: Decryptor<Blowfish> = Decryptor::new_from_slices(&self.key, &SECRET_IV)
                 .map_err(|error| IoError::new(ErrorKind::Unsupported, error))?;
 
             let decrypted = decryptor
-                .decrypt_padded_mut::<NoPadding>(&mut self.buffer[..self.buffer_len])
+                .decrypt_padded_mut::<NoPadding>(&mut self.buffer[..total_read])
                 .map_err(|error| IoError::new(ErrorKind::InvalidInput, error.to_string()))?;
 
-            self.decrypted.extend(decrypted);
+            buf[..end].copy_from_slice(&decrypted[..end]);
         }
 
-        // reset buffer_len so the next write would write over the top of the old one
-        self.buffer_len = 0;
-        // advance chunk
-        self.current_chunk += 1;
+        self.position += total_read;
 
-        let end = min(buf.len(), self.decrypted.len());
-
-        let drain = self.decrypted.drain(0..end);
-
-        let drain_len = drain.len();
-
-        buf[0..drain_len].copy_from_slice(drain.as_ref());
-
-        Ok(drain_len)
+        Ok(end)
     }
 }
 
 impl Seek for DeezerMediaSource {
-    fn seek(&mut self, pos: SeekFrom) -> IoResult<u64> {
-        self.source.seek(pos)
+    fn seek(&mut self, position: SeekFrom) -> IoResult<u64> {
+        self.source.seek(position)
     }
 }
 
 impl MediaSource for DeezerMediaSource {
     fn is_seekable(&self) -> bool {
-        self.source.is_seekable()
+        false
     }
 
     fn byte_len(&self) -> Option<u64> {
@@ -115,9 +107,7 @@ impl DeezerMediaSource {
             source,
             key,
             buffer: [0; CHUNK_SIZE],
-            buffer_len: 0,
-            current_chunk: 0,
-            decrypted: Vec::new(),
+            position: 0,
         }
     }
 }
