@@ -1,5 +1,5 @@
-use super::{CHUNK_SIZE, SECRET_IV};
-use crate::util::seek::SeekableSource;
+use super::SECRET_IV;
+use crate::util::seek::create_vec_with_capacity;
 use async_trait::async_trait;
 use blowfish::Blowfish;
 use cbc::cipher::{KeyIvInit, block_padding::NoPadding};
@@ -9,6 +9,8 @@ use std::cmp::min;
 use std::io::{Error as IoError, ErrorKind, Read, Result as IoResult, Seek, SeekFrom};
 use symphonia::core::io::MediaSource;
 use tokio::task::block_in_place;
+
+static CHUNK_SIZE: usize = 2048;
 
 pub struct DeezerHttpStream {
     request: HttpRequest,
@@ -25,12 +27,10 @@ impl Compose for DeezerHttpStream {
         &mut self,
     ) -> Result<AudioStream<Box<dyn MediaSource>>, AudioStreamError> {
         let request = self.request.create_async().await?;
-
-        let seekable = SeekableSource::new(request.input);
         let hint = request.hint;
 
         Ok(AudioStream {
-            input: Box::new(DeezerMediaSource::new(Box::new(seekable), self.key))
+            input: Box::new(DeezerMediaSource::new(request.input, self.key))
                 as Box<dyn MediaSource>,
             hint,
         })
@@ -41,15 +41,39 @@ impl Compose for DeezerHttpStream {
     }
 }
 
+/**
+ * Deezer don't support the global seeker due to custom deserializing, hence it needs to be implemented manually
+ * PS I could probably have the universal seek support this but probs i'll do it at some point
+ */
 pub struct DeezerMediaSource {
     source: Box<dyn MediaSource>,
     key: [u8; 16],
     buffer: [u8; CHUNK_SIZE],
-    position: usize
+    position: usize,
+    downloaded: Vec<u8>,
+    downloaded_bytes: usize,
+    total_bytes: Option<usize>,
 }
 
 impl Read for DeezerMediaSource {
     fn read(&mut self, buf: &mut [u8]) -> IoResult<usize> {
+        if self.position < self.downloaded_bytes {
+            let mut read_up_to = self.position + buf.len();
+
+            if read_up_to > self.downloaded_bytes {
+                read_up_to = self.downloaded_bytes;
+            }
+
+            let bytes = &self.downloaded[self.position..read_up_to];
+            let bytes_read = bytes.len();
+
+            buf[0..bytes_read].copy_from_slice(bytes);
+
+            self.position += bytes_read;
+
+            return Ok(bytes_read);
+        }
+
         let mut total_read = 0;
 
         while total_read < CHUNK_SIZE {
@@ -62,12 +86,10 @@ impl Read for DeezerMediaSource {
             total_read += bytes_read;
         }
 
-        let current_chunk = self.position / CHUNK_SIZE;
-
-        let end = min(buf.len(), total_read);
+        let current_chunk = (self.downloaded_bytes as f64 / CHUNK_SIZE as f64).ceil() as usize;
 
         if current_chunk % 3 > 0 || total_read < CHUNK_SIZE {
-            buf[..end].copy_from_slice(&self.buffer[..end]);
+            self.downloaded.extend(self.buffer[..total_read].iter());
         } else {
             let decryptor: Decryptor<Blowfish> = Decryptor::new_from_slices(&self.key, &SECRET_IV)
                 .map_err(|error| IoError::new(ErrorKind::Unsupported, error))?;
@@ -76,24 +98,65 @@ impl Read for DeezerMediaSource {
                 .decrypt_padded_mut::<NoPadding>(&mut self.buffer[..total_read])
                 .map_err(|error| IoError::new(ErrorKind::InvalidInput, error.to_string()))?;
 
-            buf[..end].copy_from_slice(&decrypted[..end]);
+            self.downloaded.extend(decrypted[..total_read].iter());
         }
 
-        self.position += total_read;
+        self.downloaded_bytes += total_read;
 
-        Ok(end)
+        let mut read_up_to = self.position + min(buf.len(), self.downloaded_bytes);
+        
+        if read_up_to > self.downloaded_bytes {
+            read_up_to = self.downloaded_bytes;
+        }
+
+        let bytes = &self.downloaded[self.position..read_up_to];
+        let bytes_read = bytes.len();
+
+        buf[0..bytes_read].copy_from_slice(bytes);
+
+        self.position += bytes_read;
+
+        Ok(bytes_read)
     }
 }
 
 impl Seek for DeezerMediaSource {
     fn seek(&mut self, position: SeekFrom) -> IoResult<u64> {
-        self.source.seek(position)
+        let new_position = match position {
+            SeekFrom::Start(n) => n as usize,
+            SeekFrom::Current(offset) => {
+                let pos = self.position as i64 + offset;
+
+                if pos < 0 {
+                    return Err(IoError::new(ErrorKind::InvalidInput, "Negative seek"));
+                }
+
+                pos as usize
+            }
+            SeekFrom::End(offset) => {
+                let length = self
+                    .total_bytes
+                    .ok_or_else(|| IoError::new(ErrorKind::Unsupported, "Length unknown"))?;
+
+                let pos = length as i64 + offset;
+
+                if pos < 0 {
+                    return Err(IoError::new(ErrorKind::InvalidInput, "Negative seek"));
+                }
+
+                pos as usize
+            }
+        };
+
+        self.position = new_position.min(self.total_bytes.unwrap_or(usize::MAX));
+
+        Ok(self.position as u64)
     }
 }
 
 impl MediaSource for DeezerMediaSource {
     fn is_seekable(&self) -> bool {
-        false
+        true
     }
 
     fn byte_len(&self) -> Option<u64> {
@@ -103,11 +166,16 @@ impl MediaSource for DeezerMediaSource {
 
 impl DeezerMediaSource {
     pub fn new(source: Box<dyn MediaSource>, key: [u8; 16]) -> Self {
+        let total_bytes = block_in_place(|| source.byte_len().map(|size| size as usize));
+
         Self {
             source,
             key,
             buffer: [0; CHUNK_SIZE],
+            downloaded: create_vec_with_capacity(total_bytes),
             position: 0,
+            downloaded_bytes: 0,
+            total_bytes,
         }
     }
 }
