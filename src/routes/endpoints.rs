@@ -71,30 +71,34 @@ pub async fn update_player(
         .get_player(&id)
         .ok_or(EndpointError::NotFound)?;
 
-    if let Some(Some(encoded)) = update_player.track.map(|track| track.encoded) {
+    let mut stopped = false;
+
+    if let Some(encoded) = update_player.track.map(|track| track.encoded) {
         if !player.active.load(Ordering::Relaxed) || !query.no_replace.unwrap_or(false) {
             match encoded {
-                Value::Null => {
-                    player.stop().await;
-                }
                 Value::String(encoded) => {
                     player.play(encoded).await?;
                 }
-                _ => {}
+                _ => {
+                    player.stop().await;
+                    stopped = true;
+                }
             }
         }
     }
 
-    if let Some(pause) = update_player.paused {
-        player.pause(pause).await;
-    }
+    if !stopped {
+        if let Some(pause) = update_player.paused {
+            player.pause(pause).await;
+        }
 
-    if let Some(position) = update_player.position {
-        player.seek(position).await;
-    }
+        if let Some(position) = update_player.position {
+            player.seek(position).await;
+        }
 
-    if let Some(volume) = update_player.volume {
-        player.set_volume(volume as f32).await;
+        if let Some(volume) = update_player.volume {
+            player.set_volume(volume as f32).await;
+        }
     }
 
     let string = serde_json::to_string_pretty(&*player.data.lock().await)?;
@@ -166,22 +170,24 @@ pub async fn encode(query: Query<EncodeQueryString>) -> Result<Response<Body>, E
         for source in AvailableSources.iter() {
             match source.value() {
                 Sources::Youtube(src) => {
-                    if src.try_search(&query.identifier).await {
-                        result = src.search(&query.identifier).await?;
-                    } else if src.valid_url(&query.identifier).await {
-                        result = src.resolve(&query.identifier).await?;
+                    let option = src.parse_query(&query.identifier);
+
+                    if let Some(query) = option {
+                        result = src.resolve(query).await?;
                     }
                 }
                 Sources::Deezer(src) => {
-                    if src.try_search(&query.identifier).await {
-                        result = src.search(&query.identifier).await?;
-                    } else if src.valid_url(&query.identifier).await {
-                        result = src.resolve(&query.identifier).await?;
+                    let option = src.parse_query(&query.identifier);
+
+                    if let Some(query) = option {
+                        result = src.resolve(query).await?;
                     }
                 }
                 Sources::Http(src) => {
-                    if src.valid_url(&query.identifier).await {
-                        result = src.resolve(&query.identifier).await?;
+                    let option = src.parse_query(&query.identifier);
+
+                    if let Some(query) = option {
+                        result = src.resolve(query).await?;
                     }
                 }
             }

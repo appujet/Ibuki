@@ -7,6 +7,11 @@ use crate::{
 use reqwest::Client;
 use songbird::tracks::Track;
 
+pub enum Query {
+    Url(String),
+    Search(String),
+}
+
 pub enum Sources {
     Youtube(Youtube),
     Deezer(Deezer),
@@ -20,13 +25,9 @@ pub trait Source {
 
     fn get_client(&self) -> Client;
 
-    async fn valid_url(&self, url: &str) -> bool;
+    fn parse_query(&self, url: &str) -> Option<Query>;
 
-    async fn try_search(&self, query: &str) -> bool;
-
-    async fn search(&self, url: &str) -> Result<ApiTrackResult, ResolverError>;
-
-    async fn resolve(&self, url: &str) -> Result<ApiTrackResult, ResolverError>;
+    async fn resolve(&self, query: Query) -> Result<ApiTrackResult, ResolverError>;
 
     async fn make_playable(&self, track: ApiTrack) -> Result<Track, ResolverError>;
 }

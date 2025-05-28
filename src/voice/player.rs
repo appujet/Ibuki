@@ -115,6 +115,7 @@ impl Player {
             );
 
             driver.add_global_event(
+                // todo: configurabble
                 Event::Periodic(Duration::from_secs(10), None),
                 PlayerEvent::new(Event::Periodic(Duration::from_secs(10), None), self),
             );
@@ -164,13 +165,21 @@ impl Player {
             plugin_info: Empty,
         };
 
-        let track = api_track.make_playable().await?;
+        let mut track = api_track.make_playable().await?;
+
+        let guard = self.data.lock().await;
+
+        if guard.volume as f32 != track.volume {
+            track = track.volume(guard.volume as f32);
+        }
+
+        drop(guard);
+
+        // todo: before sending the new track, we may want to send a replaced notification from here before playing the new track
 
         let mut guard = self.driver.lock().await;
 
         let driver = guard.as_mut().ok_or(PlayerError::MissingDriver)?;
-
-        driver.stop();
 
         let track_handle = driver.play_only(track);
 
@@ -204,13 +213,13 @@ impl Player {
     }
 
     pub async fn stop(&self) {
-        let mut guard = self.driver.lock().await;
+        let guard = self.handle.lock().await;
 
-        let Some(driver) = guard.as_mut() else {
+        let Some(handle) = guard.as_ref() else {
             return;
         };
 
-        driver.stop();
+        handle.stop().ok();
     }
 
     pub async fn seek(&self, position: u32) {

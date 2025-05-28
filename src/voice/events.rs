@@ -239,6 +239,7 @@ async fn handle_player_event(player_event: PlayerEvent, data_result: DataResult)
                     let mut data = arc.lock().await;
 
                     data.track.take();
+                    data.paused = false;
                     data.state.position = 0;
 
                     drop(data);
@@ -249,7 +250,8 @@ async fn handle_player_event(player_event: PlayerEvent, data_result: DataResult)
                     let event = ApiTrackEnd {
                         guild_id: player_event.guild_id.0.get(),
                         track: track.as_ref().clone(),
-                        reason: String::from("Done playing the track"),
+                        // todo: reflect reason for this end
+                        reason: String::from("finished"),
                     };
 
                     let serialized = serde_json::to_string(&ApiNodeMessage::Event(Box::new(

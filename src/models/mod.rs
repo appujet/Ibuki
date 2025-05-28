@@ -207,8 +207,7 @@ pub enum ApiPlayerEvents {
 #[derive(Default, Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateApiPlayerTrack {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub encoded: Option<Value>,
+    pub encoded: Value,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub identifier: Option<String>,
 }

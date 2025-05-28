@@ -7,6 +7,7 @@ use super::stream::DeezerHttpStream;
 use super::{ARL, MEDIA_BASE, PUBLIC_API_BASE};
 use super::{PRIVATE_API_BASE, SECRET_KEY, model::Tokens};
 use crate::util::encoder::encode_base64;
+use crate::util::source::Query;
 use crate::util::url::is_url;
 use crate::{
     models::{ApiTrack, ApiTrackInfo, ApiTrackResult},
@@ -46,91 +47,99 @@ impl Source for Deezer {
         self.client.clone()
     }
 
-    async fn valid_url(&self, url: &str) -> bool {
-        is_url(url) && self.regex.captures(url).is_some()
-    }
-
-    async fn try_search(&self, query: &str) -> bool {
-        query.starts_with(self.search_prefixes.0)
-            || query.starts_with(self.search_prefixes.1)
-            || query.starts_with(self.search_prefixes.2)
-    }
-
-    async fn search(&self, query: &str) -> Result<ApiTrackResult, ResolverError> {
-        let mut data: Option<Vec<DeezerApiTrack>> = None;
-
-        if query.starts_with(self.search_prefixes.0) {
-            let term = query.split_at(self.search_prefixes.0.len()).1;
-
-            let query = [("q", term)];
-
-            let request = self
-                .client
-                .get(format!("{PUBLIC_API_BASE}/search"))
-                .query(&query)
-                .build()?;
-
-            let response = self.client.execute(request).await?;
-
-            if !response.status().is_success() {
-                return Ok(ApiTrackResult::Empty(None));
+    fn parse_query(&self, query: &str) -> Option<Query> {
+        if !is_url(query) {
+            if query.starts_with(self.search_prefixes.0)
+                || query.starts_with(self.search_prefixes.1)
+                || query.starts_with(self.search_prefixes.2)
+            {
+                return Some(Query::Search(query.to_string()));
+            } else {
+                return None;
             }
-
-            let tracks = response.json::<DeezerData<Vec<DeezerApiTrack>>>().await?;
-
-            let _ = data.insert(tracks.data);
-        } else if query.starts_with(self.search_prefixes.1) {
-            let isrc = query.split_at(self.search_prefixes.1.len()).1;
-
-            let request = self
-                .client
-                .get(format!("{PUBLIC_API_BASE}/track/isrc:{isrc}"))
-                .build()?;
-
-            let response = self.client.execute(request).await?;
-
-            if !response.status().is_success() {
-                return Ok(ApiTrackResult::Empty(None));
-            }
-
-            let _ = data.insert(vec![response.json::<DeezerApiTrack>().await?]);
         }
 
-        let Some(api_tracks) = data else {
-            return Ok(ApiTrackResult::Empty(None));
-        };
+        self.regex.captures(query)?;
 
-        let tracks = api_tracks
-            .iter()
-            .filter(|deezer_api_track| deezer_api_track.readable)
-            .map(|deezer_api_track| {
-                let info = ApiTrackInfo {
-                    identifier: deezer_api_track.id.to_string(),
-                    is_seekable: true,
-                    author: deezer_api_track.artist.name.clone(),
-                    length: (deezer_api_track.duration as u64) * 1000,
-                    is_stream: false,
-                    position: 0,
-                    title: deezer_api_track.title.clone(),
-                    uri: Some(deezer_api_track.link.clone()),
-                    artwork_url: Some(deezer_api_track.album.thumbnail.clone()),
-                    isrc: deezer_api_track.isrc.clone(),
-                    source_name: self.get_name().to_string(),
-                };
-
-                ApiTrack {
-                    encoded: encode_base64(&info).unwrap(),
-                    info,
-                    plugin_info: crate::models::Empty,
-                }
-            })
-            .collect::<Vec<ApiTrack>>();
-
-        Ok(ApiTrackResult::Search(tracks))
+        Some(Query::Url(query.to_string()))
     }
 
-    async fn resolve(&self, _url: &str) -> Result<ApiTrackResult, ResolverError> {
-        todo!()
+    async fn resolve(&self, query: Query) -> Result<ApiTrackResult, ResolverError> {
+        match query {
+            Query::Url(_) => todo!(),
+            Query::Search(input) => {
+                let mut data: Option<Vec<DeezerApiTrack>> = None;
+
+                if input.starts_with(self.search_prefixes.0) {
+                    let term = input.split_at(self.search_prefixes.0.len()).1;
+
+                    let query = [("q", term)];
+
+                    let request = self
+                        .client
+                        .get(format!("{PUBLIC_API_BASE}/search"))
+                        .query(&query)
+                        .build()?;
+
+                    let response = self.client.execute(request).await?;
+
+                    if !response.status().is_success() {
+                        return Ok(ApiTrackResult::Empty(None));
+                    }
+
+                    let tracks = response.json::<DeezerData<Vec<DeezerApiTrack>>>().await?;
+
+                    let _ = data.insert(tracks.data);
+                } else if input.starts_with(self.search_prefixes.1) {
+                    let isrc = input.split_at(self.search_prefixes.1.len()).1;
+
+                    let request = self
+                        .client
+                        .get(format!("{PUBLIC_API_BASE}/track/isrc:{isrc}"))
+                        .build()?;
+
+                    let response = self.client.execute(request).await?;
+
+                    if !response.status().is_success() {
+                        return Ok(ApiTrackResult::Empty(None));
+                    }
+
+                    let _ = data.insert(vec![response.json::<DeezerApiTrack>().await?]);
+                }
+
+                let Some(api_tracks) = data else {
+                    return Ok(ApiTrackResult::Empty(None));
+                };
+
+                let tracks = api_tracks
+                    .iter()
+                    .filter(|deezer_api_track| deezer_api_track.readable)
+                    .map(|deezer_api_track| {
+                        let info = ApiTrackInfo {
+                            identifier: deezer_api_track.id.to_string(),
+                            is_seekable: true,
+                            author: deezer_api_track.artist.name.clone(),
+                            length: (deezer_api_track.duration as u64) * 1000,
+                            is_stream: false,
+                            position: 0,
+                            title: deezer_api_track.title.clone(),
+                            uri: Some(deezer_api_track.link.clone()),
+                            artwork_url: Some(deezer_api_track.album.thumbnail.clone()),
+                            isrc: deezer_api_track.isrc.clone(),
+                            source_name: self.get_name().to_string(),
+                        };
+
+                        ApiTrack {
+                            encoded: encode_base64(&info).unwrap(),
+                            info,
+                            plugin_info: crate::models::Empty,
+                        }
+                    })
+                    .collect::<Vec<ApiTrack>>();
+
+                Ok(ApiTrackResult::Search(tracks))
+            }
+        }
     }
 
     async fn make_playable(&self, track: ApiTrack) -> Result<Track, ResolverError> {

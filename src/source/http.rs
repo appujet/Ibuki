@@ -1,7 +1,10 @@
 use crate::{
     models::{ApiTrack, ApiTrackInfo, ApiTrackResult, Empty},
     util::{
-        encoder::encode_base64, errors::ResolverError, seek::SeekableSource, source::Source,
+        encoder::encode_base64,
+        errors::ResolverError,
+        seek::SeekableSource,
+        source::{Query, Source},
         url::is_url,
     },
 };
@@ -31,21 +34,22 @@ impl Source for Http {
         self.client.clone()
     }
 
-    async fn valid_url(&self, url: &str) -> bool {
-        is_url(url)
+    fn parse_query(&self, query: &str) -> Option<Query> {
+        if !is_url(query) {
+            return None;
+        }
+
+        Some(Query::Url(query.to_string()))
     }
 
-    async fn try_search(&self, _: &str) -> bool {
-        false
-    }
+    async fn resolve(&self, query: Query) -> Result<ApiTrackResult, ResolverError> {
+        let url = match query {
+            Query::Url(url) => url,
+            Query::Search(_) => return Err(ResolverError::InputNotSupported),
+        };
 
-    async fn search(&self, _: &str) -> Result<ApiTrackResult, ResolverError> {
-        Err(ResolverError::InputNotSupported)
-    }
-
-    async fn resolve(&self, url: &str) -> Result<ApiTrackResult, ResolverError> {
         let client = self.get_client();
-        let response = client.get(url).send().await?;
+        let response = client.get(url.as_str()).send().await?;
 
         let content = response
             .headers()
@@ -56,7 +60,7 @@ impl Source for Http {
             return Err(ResolverError::InputNotSupported);
         }
 
-        let mut request = HttpRequest::new(self.get_client(), url.to_string());
+        let mut request = HttpRequest::new(self.get_client(), url.to_owned());
 
         let mut metadata = request
             .aux_metadata()
@@ -64,7 +68,7 @@ impl Source for Http {
             .unwrap_or(AuxMetadata::default());
 
         if metadata.source_url.is_none() {
-            let _ = metadata.source_url.insert(url.to_owned());
+            let _ = metadata.source_url.insert(url);
         }
 
         let info = self.make_track(metadata);
