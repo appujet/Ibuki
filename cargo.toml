@@ -51,9 +51,9 @@ version = "1.44.1"
 features = ["tracing", "macros", "signal", "rt-multi-thread"]
 
 [dependencies.songbird]
+version = "0.5.0"
 default-features = false
 features = ["driver", "tungstenite", "rustls"]
-path = "../songbird"
 
 [dependencies.symphonia]
 version = "0.5.4"
