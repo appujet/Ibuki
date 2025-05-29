@@ -2,27 +2,54 @@ name: Manual Deployment
 on:
   workflow_dispatch
 
-env:
-  SRC_DIR : ../..
-
 jobs:
-  release:
-    name: Release ${{ matrix.target }}
+  build-windows-x64:
+
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Build executable
+      run: cargo build --release
+      
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+
+      with:
+        name: ${{ github.job }}-windows-x64
+        path: ./target/release/ibuki.exe
+        compression-level: 0
+        
+  build-linux:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - target: x86_64-pc-windows-gnu
-            archive: zip
-          - target: x86_64-unknown-linux-musl
-            archive: tar.gz tar.xz tar.zst
+        config:
+          - name: x64
+            toolchain: x86_64-unknown-linux-gnu 
+            default: true
+
     steps:
-      - uses: actions/checkout@master
-      - name: Compile and release
-        uses: rust-build/rust-build.action@v1.4.5
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: sudo apt-get install -y gcc-multilib
+
+      - name: Install rust toolchain
+        if: ${{ !matrix.config.default }}
+        continue-on-error: true 
+        run: |
+          rustup install stable-${{ matrix.config.toolchain }} --force-non-host
+          rustup target add ${{ matrix.config.toolchain }}
+      
+      - name: Build executable
+        run: rustup run stable-${{ matrix.config.toolchain }} cargo build --release
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
         with:
-          RUSTTARGET: ${{ matrix.target }}
-          ARCHIVE_TYPES: ${{ matrix.archive }}
+          name: ${{ github.job }}-${{ matrix.config.toolchain }}
+          path: ./target/release/ibuki
+          compression-level: 0
