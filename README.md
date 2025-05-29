@@ -42,9 +42,9 @@
 - [x] Youtube
   - Support is available via `RustyPipe`, and `Ytdlp` support will be added in future
 - [x] Deezer
-  - Only search is supported, link loading is wip `dzisrc:` `dzisearch:`
-- [x] Http
+  - Only search is supported `dzisrc:` `dzisearch:`. Link loading is wip
 - [ ] Soundcloud
+- [x] Http
 
 > Support for more sources will come in future as I free more time to work on this project. Feel free to open a PR if you want to implement a new source
   
