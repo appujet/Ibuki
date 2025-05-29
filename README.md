@@ -36,6 +36,17 @@
 
 - Cases you may want to try Ibuki
   - You want something that runs natively on your system without additional overhead
+
+## Sources
+
+- [x] Youtube
+  - Support is available via `RustyPipe`, and `Ytdlp` support will be added in future
+- [x] Deezer
+  - Only search is supported, link loading is wip `dzisrc:` `dzisearch:`
+- [x] Http
+- [ ] Soundcloud
+
+> Support for more sources will come in future as I free more time to work on this project. Feel free to open a PR if you want to implement a new source
   
 ## Downloads
 
@@ -44,6 +55,13 @@
   - Linux Download: [x86_64-unknown-linux-gnu](https://github.com/Deivu/Ibuki/actions/runs/15319029072/artifacts/3218967010)
     - These downloads are directly linked from [Github Actions](https://github.com/Deivu/Ibuki/actions) latest run. You can always build the project if you don't want to download the binaries
 - Docker support will come in future
+
+## Contributing
+- The dev enviroment used in this project is
+  - Windows
+  - Rust toolchain: `nightly-x86_64-pc-windows-msvc`
+  - Cmake: `3.31.7`
+- This should enable you to fork, compile and test the project before opening a PR
 
 ## Configuration
 
