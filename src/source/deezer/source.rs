@@ -4,8 +4,9 @@ use super::model::{
     InternalDeezerResponse, InternalDeezerSongData,
 };
 use super::stream::DeezerHttpStream;
-use super::{ARL, MEDIA_BASE, PUBLIC_API_BASE};
-use super::{PRIVATE_API_BASE, SECRET_KEY, model::Tokens};
+use super::{MEDIA_BASE, PUBLIC_API_BASE};
+use super::{PRIVATE_API_BASE, model::Tokens};
+use crate::Config;
 use crate::util::encoder::encode_base64;
 use crate::util::source::Query;
 use crate::util::url::is_url;
@@ -249,7 +250,14 @@ impl Deezer {
         let mut key: [u8; 16] = [0; 16];
 
         for i in 0..16 {
-            key[i] = hash[i] ^ hash[i + 16] ^ SECRET_KEY[i];
+            key[i] = hash[i]
+                ^ hash[i + 16]
+                ^ Config
+                    .deezer_config
+                    .as_ref()
+                    .expect("Unexpected Nullish Config")
+                    .decrypt_key
+                    .as_bytes()[i];
         }
 
         key
@@ -275,7 +283,18 @@ impl Deezer {
             .client
             .post(PRIVATE_API_BASE)
             .header("Content-Length", "0")
-            .header("Cookie", format!("arl={ARL}"))
+            .header(
+                "Cookie",
+                format!(
+                    "arl={}",
+                    Config
+                        .deezer_config
+                        .as_ref()
+                        .expect("Unexpected Nullish Config")
+                        .arl
+                        .to_owned()
+                ),
+            )
             .query(&query)
             .build()?;
 

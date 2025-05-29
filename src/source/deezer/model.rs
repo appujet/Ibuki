@@ -1,6 +1,6 @@
 #![allow(dead_code, unused)]
 
-use crate::source::deezer::ARL;
+use crate::Config;
 use serde::{Deserialize, Serialize};
 use tokio::time::Instant;
 
@@ -362,7 +362,17 @@ pub struct Tokens {
 
 impl Tokens {
     pub fn create_cookie(&self) -> String {
-        format!("arl={}; {}; {}", ARL, self.session_id, self.unique_id)
+        format!(
+            "arl={}; {}; {}",
+            Config
+                .deezer_config
+                .as_ref()
+                .expect("Unexpected Nullish Config")
+                .arl
+                .to_owned(),
+            self.session_id,
+            self.unique_id
+        )
     }
 }
 

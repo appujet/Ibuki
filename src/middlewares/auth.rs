@@ -1,3 +1,4 @@
+use crate::Config;
 use crate::util::errors::EndpointError;
 use axum::{body::Body, extract::Request, http::Response, middleware::Next};
 
@@ -8,8 +9,8 @@ pub async fn authenticate(request: Request, next: Next) -> Result<Response<Body>
         .ok_or(EndpointError::MissingOption("Authorization"))?
         .to_str()?;
 
-    if authorization != "placeholder" {
-        // todo: return status code unathorized
+    if authorization != Config.authorization {
+        return Err(EndpointError::Unauthorized);
     }
 
     Ok(next.run(request).await)

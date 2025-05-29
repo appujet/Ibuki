@@ -27,6 +27,7 @@ use tower::ServiceBuilder;
 use tracing::Level;
 use tracing_subscriber::fmt;
 use util::{
+    config::Config,
     headers::generate_headers,
     source::{Source, Sources},
 };
@@ -41,8 +42,9 @@ mod voice;
 mod ws;
 
 #[global_allocator]
-static ALLOCATOR: Cap<GlobalDlmalloc> =
-    Cap::new(GlobalDlmalloc, ByteSize::mb(128).as_u64() as usize);
+static ALLOCATOR: Cap<GlobalDlmalloc> = Cap::new(GlobalDlmalloc, usize::MAX);
+#[allow(non_upper_case_globals)]
+pub static Config: LazyLock<Config> = LazyLock::new(Config::new);
 #[allow(non_upper_case_globals)]
 pub static Scheduler: LazyLock<Scheduler> = LazyLock::new(Scheduler::default);
 #[allow(non_upper_case_globals)]
@@ -75,12 +77,13 @@ async fn main() {
 
     tracing::subscriber::set_global_default(subscriber).expect("Failed to set global logger");
 
+    LazyLock::force(&Config);
     LazyLock::force(&Clients);
     LazyLock::force(&AvailableSources);
     LazyLock::force(&Start);
     LazyLock::force(&Reqwest);
 
-    {
+    if Config.youtube_config.is_some() {
         let src_name = String::from("Youtube");
 
         AvailableSources.insert(
@@ -91,7 +94,7 @@ async fn main() {
         tracing::info!("Registered [{}] into sources list", src_name);
     }
 
-    {
+    if Config.deezer_config.is_some() {
         let src_name = String::from("Deezer");
         let client = Deezer::new(Some(Reqwest.clone()));
 
@@ -102,7 +105,7 @@ async fn main() {
         tracing::info!("Registered [{}] into sources list", src_name);
     }
 
-    {
+    if Config.http_config.is_some() {
         let src_name = String::from("HTTP");
 
         AvailableSources.insert(
@@ -117,7 +120,9 @@ async fn main() {
     let cores = perf_monitor::cpu::processor_numbers().unwrap();
 
     tokio::spawn(async move {
-        let mut interval = interval(Duration::from_secs(30));
+        let mut interval = interval(Duration::from_secs(
+            Config.status_update_secs.unwrap_or(30) as u64
+        ));
 
         loop {
             interval.tick().await;
@@ -134,7 +139,7 @@ async fn main() {
             let free = ALLOCATOR.remaining() as u64;
             let limit = ALLOCATOR.limit() as u64;
 
-            tracing::info!(
+            tracing::debug!(
                 "Memory Usage: (Heap => [Used: {:.2}] [Free: {:.2}] [Limit: {:.2}]) (RSS => [{:.2}]) (VM => [{:.2}])",
                 ByteSize::b(used).display().si(),
                 ByteSize::b(free).display().si(),
@@ -218,7 +223,9 @@ async fn main() {
         )
         .route("/", routing::get(routes::global::landing));
 
-    let listener = net::TcpListener::bind("0.0.0.0:8080").await.unwrap();
+    let listener = net::TcpListener::bind(format!("{}:{}", Config.address, Config.port))
+        .await
+        .unwrap();
 
     tracing::info!("Server is bound to {}", listener.local_addr().unwrap());
 

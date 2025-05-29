@@ -1,13 +1,13 @@
 use super::{events::PlayerEvent, manager::CleanerSender};
 use crate::{
-    Scheduler,
+    Config, Scheduler,
     models::{ApiPlayer, ApiPlayerState, ApiTrack, ApiVoiceData, Empty},
     util::{decoder::decode_base64, errors::PlayerError},
 };
 use axum::extract::ws::Message;
 use flume::WeakSender;
 use songbird::{
-    Config, ConnectionInfo, CoreEvent, Driver, Event, TrackEvent,
+    Config as SongbirdConfig, ConnectionInfo, CoreEvent, Driver, Event, TrackEvent,
     driver::Bitrate,
     id::{GuildId, UserId},
     tracks::{TrackHandle, TrackState},
@@ -34,7 +34,7 @@ impl Player {
     pub async fn new(
         websocket: WeakSender<Message>,
         cleaner: WeakSender<CleanerSender>,
-        config: Option<Config>,
+        config: Option<SongbirdConfig>,
         user_id: UserId,
         guild_id: GuildId,
         server_update: ApiVoiceData,
@@ -89,7 +89,7 @@ impl Player {
     pub async fn connect(
         &self,
         server_update: &ApiVoiceData,
-        config: Option<Config>,
+        config: Option<SongbirdConfig>,
     ) -> Result<(), PlayerError> {
         let connection = ConnectionInfo {
             channel_id: None,
@@ -115,8 +115,10 @@ impl Player {
             );
 
             driver.add_global_event(
-                // todo: configurabble
-                Event::Periodic(Duration::from_secs(10), None),
+                Event::Periodic(
+                    Duration::from_secs(Config.player_update_secs.unwrap_or(5) as u64),
+                    None,
+                ),
                 PlayerEvent::new(Event::Periodic(Duration::from_secs(10), None), self),
             );
 

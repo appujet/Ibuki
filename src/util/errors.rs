@@ -95,6 +95,8 @@ pub enum Base64EncodeError {
 
 #[derive(Error, Debug)]
 pub enum EndpointError {
+    #[error("Unauthorized")]
+    Unauthorized,
     #[error("Not found")]
     NotFound,
     #[error("Required option {0} missing in headers")]
@@ -168,6 +170,7 @@ impl IntoResponse for EndpointError {
             EndpointError::PlayerError(player_error) => {
                 (StatusCode::INTERNAL_SERVER_ERROR, player_error.to_string())
             }
+            EndpointError::Unauthorized => (StatusCode::FORBIDDEN, self.to_string()),
         };
 
         tuple.into_response()
