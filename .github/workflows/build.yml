@@ -2,6 +2,9 @@ name: Manual Deployment
 on:
   workflow_dispatch
 
+env:
+  SRC_DIR : ../..
+
 jobs:
   release:
     name: Release ${{ matrix.target }}
