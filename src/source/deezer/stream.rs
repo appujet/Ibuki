@@ -104,7 +104,7 @@ impl Read for DeezerMediaSource {
         self.downloaded_bytes += total_read;
 
         let mut read_up_to = self.position + min(buf.len(), self.downloaded_bytes);
-        
+
         if read_up_to > self.downloaded_bytes {
             read_up_to = self.downloaded_bytes;
         }
