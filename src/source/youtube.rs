@@ -19,7 +19,7 @@ use songbird::{
     input::{Compose, HttpRequest, Input, LiveInput},
     tracks::Track,
 };
-use std::sync::Arc;
+use std::{fs, sync::Arc};
 
 static PROTOCOL_REGEX: &str = "(?:http://|https://|)";
 static DOMAIN_REGEX: &str = "(?:www\\.|m\\.|music\\.|)youtube\\.com";
@@ -57,16 +57,37 @@ pub struct Youtube {
 
 impl Source for Youtube {
     fn new(client: Option<Client>) -> Self {
+        let mut rusty_pipe = RustyPipe::builder().n_http_retries(0);
+
+        if !fs::exists("./rustypipe").unwrap() {
+            fs::create_dir("./rustypipe").unwrap();
+        }
+
+        if !fs::exists("./rustypipe/botguard").unwrap() {
+            fs::create_dir("./rustypipe/botguard").unwrap();
+        }
+
+        if fs::exists("./rustypipe/botguard/bin").unwrap() {
+            rusty_pipe = rusty_pipe
+                .po_token_cache()
+                .botguard_bin("./rustypipe/botguard/bin")
+                .botguard_snapshot_file("./rustypipe/botguard");
+
+            tracing::info!("Youtube rustypipe-botguard (po_token) is set");
+        } else {
+            rusty_pipe = rusty_pipe.no_botguard();
+
+            tracing::warn!(
+                "The po_token feature was not enabled. The rustypipe-botguard was not found from './rustypipe/botguard' folder but po_cache setting was enabled. 
+                Please download one that is built for your system from 'https://codeberg.org/ThetaDev/rustypipe-botguard/releases', put it at ./rustypipe/botguard then rename it to 'bin'"
+            );
+        }
+
+        rusty_pipe = rusty_pipe.storage_dir("./rustypipe/");
+
         Self {
             client: client.unwrap_or_default(),
-            rusty_pipe: RustyPipe::builder()
-                .n_http_retries(0)
-                .po_token_cache()
-                .botguard_bin("./rustypipe/rustypipe-botguard")
-                .botguard_snapshot_file("./rustypipe/")
-                .storage_dir("./rustypipe/")
-                .build()
-                .unwrap(),
+            rusty_pipe: rusty_pipe.build().unwrap(),
             client_types: vec![
                 ClientType::Desktop,
                 ClientType::DesktopMusic,
