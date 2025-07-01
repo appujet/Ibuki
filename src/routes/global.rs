@@ -59,3 +59,7 @@ pub async fn ws(
 
     Ok(response)
 }
+
+pub async fn version() -> String {
+    String::from(env!("CARGO_PKG_VERSION"))
+}

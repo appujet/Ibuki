@@ -215,13 +215,11 @@ async fn main() {
             "/v{version}/sessions/{session_id}",
             routing::patch(routes::endpoints::update_session),
         )
-        .route_layer(
-            ServiceBuilder::new()
-                .layer(from_fn(middlewares::version::check))
-                .layer(from_fn(middlewares::auth::authenticate))
-                .layer(from_fn(middlewares::log::request)),
-        )
-        .route("/", routing::get(routes::global::landing));
+        .route_layer(ServiceBuilder::new().layer(from_fn(middlewares::version::check)))
+        .route("/version", routing::get(routes::global::version))
+        .route("/", routing::get(routes::global::landing))
+        .layer(from_fn(middlewares::auth::authenticate))
+        .layer(from_fn(middlewares::log::request));
 
     let listener = net::TcpListener::bind(format!("{}:{}", Config.address, Config.port))
         .await
